@@ -1,3 +1,5 @@
+// AUTO-GENERATED from ../SSTUpdates-git-workflow.py - do not edit by hand.
+window.SST_PYTHON = String.raw`
 #package imports
 import os
 from pathlib import Path
@@ -594,3 +596,5 @@ for table in doc.tables:
 doc.save(output_sst_path)
 
 
+
+`;

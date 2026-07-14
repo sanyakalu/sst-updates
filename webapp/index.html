@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SST Update Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --pink:       #f472b6;
+      --pink-dark:  #db2777;
+      --pink-light: #fce7f3;
+      --pink-mid:   #fbcfe8;
+      --accent:     #e879f9;
+      --text:       #4a1942;
+      --text-soft:  #9d6e96;
+      --border:     #f9a8d4;
+      --bg:         #fff0f7;
+      --card:       #ffffff;
+      --ok:         #059669;
+      --err:        #e11d48;
+      --warn:       #b45309;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Nunito", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 40px 16px;
+      min-height: 100vh;
+    }
+
+    .wrap { max-width: 680px; margin: 0 auto; }
+
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--pink-dark);
+      margin-bottom: 6px;
+      letter-spacing: -0.01em;
+    }
+
+    .sub {
+      color: var(--text-soft);
+      font-size: 0.9rem;
+      margin-bottom: 28px;
+      line-height: 1.55;
+      font-weight: 500;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1.5px solid var(--pink-mid);
+      border-radius: 20px;
+      padding: 32px;
+      box-shadow: 0 6px 32px rgba(244, 114, 182, 0.13);
+    }
+
+    /* ── Fields ── */
+    .field { margin-bottom: 22px; }
+
+    label.lbl {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--text-soft);
+      margin-bottom: 8px;
+    }
+    .req { color: var(--pink-dark); }
+
+    /* Upload zones */
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 18px 16px;
+      cursor: pointer;
+      position: relative;
+      background: #fff;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: var(--pink);
+      background: var(--pink-light);
+    }
+    .upload-zone input[type="file"] {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      opacity: 0; cursor: pointer;
+    }
+    .upload-inner {
+      display: flex; align-items: center; gap: 10px;
+      pointer-events: none;
+    }
+    .upload-icon { color: var(--pink); flex-shrink: 0; }
+    .upload-text { font-size: 0.88rem; font-weight: 500; color: var(--text); }
+    .upload-text strong { color: var(--pink-dark); font-weight: 700; }
+    .upload-text small { display: block; color: var(--text-soft); font-size: 0.76rem; margin-top: 2px; }
+    .upload-chosen {
+      margin-top: 8px; font-size: 0.8rem; font-weight: 700;
+      color: var(--ok); display: none; pointer-events: none;
+    }
+
+    /* Month + year row */
+    .two-col { display: flex; gap: 16px; }
+    .two-col .field { flex: 1; }
+
+    /* Month picker */
+    .month-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 6px;
+    }
+    .month-btn {
+      border: 1.5px solid var(--border);
+      background: #fff;
+      border-radius: 9px;
+      padding: 8px 0;
+      font-family: "Nunito", sans-serif;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      transition: background 0.12s, border-color 0.12s, color 0.12s, transform 0.1s;
+    }
+    .month-btn:hover { background: var(--pink-light); border-color: var(--pink); transform: translateY(-1px); }
+    .month-btn.selected {
+      background: linear-gradient(135deg, var(--pink) 0%, var(--accent) 100%);
+      border-color: transparent;
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(244, 114, 182, 0.38);
+    }
+
+    /* Year input */
+    input[type="text"], input[type="number"] {
+      width: 100%;
+      padding: 10px 13px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      font-family: "Nunito", sans-serif;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    input:focus {
+      border-color: var(--pink);
+      box-shadow: 0 0 0 3px rgba(244, 114, 182, 0.16);
+    }
+
+    /* Run button */
+    #run {
+      width: 100%;
+      background: linear-gradient(135deg, var(--pink-dark) 0%, var(--accent) 100%);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      padding: 14px;
+      font-family: "Nunito", sans-serif;
+      font-size: 1rem;
+      font-weight: 800;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.12s, box-shadow 0.15s;
+      box-shadow: 0 4px 16px rgba(219, 39, 119, 0.28);
+      margin-top: 4px;
+    }
+    #run:hover:not(:disabled) { opacity: 0.91; transform: translateY(-2px); box-shadow: 0 6px 20px rgba(219, 39, 119, 0.36); }
+    #run:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    /* Status bar */
+    .status {
+      margin-top: 18px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: var(--pink-light);
+      border: 1px solid var(--pink-mid);
+      color: var(--text-soft);
+      font-size: 0.85rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .status.ok   { background: #ecfdf5; border-color: #6ee7b7; color: var(--ok); }
+    .status.err  { background: #fff1f2; border-color: #fda4af; color: var(--err); white-space: pre-wrap; }
+    .status.warn { background: #fffbeb; border-color: #fcd34d; color: var(--warn); }
+
+    .spinner {
+      width: 15px; height: 15px; border-radius: 50%; flex: none;
+      border: 2.5px solid rgba(219,39,119,0.2);
+      border-top-color: var(--pink-dark);
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Download link */
+    #download {
+      display: none;
+      margin-top: 14px;
+      width: 100%;
+      text-align: center;
+      text-decoration: none;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: #fff;
+      font-family: "Nunito", sans-serif;
+      font-weight: 800;
+      font-size: 0.95rem;
+      padding: 13px 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.28);
+      transition: opacity 0.15s, transform 0.12s;
+    }
+    #download:hover { opacity: 0.9; transform: translateY(-1px); }
+
+    /* Log */
+    details { margin-top: 16px; }
+    summary {
+      cursor: pointer;
+      color: var(--text-soft);
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      user-select: none;
+    }
+    pre#log {
+      background: #1e0a1a;
+      color: #f9c8e8;
+      padding: 14px;
+      border-radius: 10px;
+      font-size: 0.75rem;
+      max-height: 220px;
+      overflow: auto;
+      margin-top: 10px;
+      white-space: pre-wrap;
+      line-height: 1.6;
+    }
+
+    .hint { color: var(--text-soft); font-size: 0.77rem; font-weight: 500; margin-top: 5px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>SST Update Generator</h1>
+    <p class="sub">Upload last month's Security Status Table and this month's update file, pick the target month, and download the generated document. Everything runs locally in your browser.</p>
+
+    <div class="card">
+
+      <!-- Previous SST -->
+      <div class="field">
+        <label class="lbl" for="prevFile">Previous SST document <span class="req">*</span></label>
+        <div class="upload-zone" id="zone-prev">
+          <input type="file" id="prevFile" accept=".docx" />
+          <div class="upload-inner">
+            <svg class="upload-icon" width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 12V4m0 0L8 8m4-4l4 4"/>
+            </svg>
+            <div class="upload-text">
+              <strong>Click to upload</strong> or drag and drop
+              <small>Last month's SST — .docx only</small>
+            </div>
+          </div>
+          <div class="upload-chosen" id="chosen-prev"></div>
+        </div>
+      </div>
+
+      <!-- Monthly update file -->
+      <div class="field">
+        <label class="lbl">Monthly update file <span class="req">*</span></label>
+
+        <div class="upload-zone" id="zone-upd">
+          <input type="file" id="updFile" accept=".txt,.docx" />
+          <div class="upload-inner">
+            <svg class="upload-icon" width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 12V4m0 0L8 8m4-4l4 4"/>
+            </svg>
+            <div class="upload-text">
+              <strong>Click to upload</strong> or drag and drop
+              <small>This month's patch list — .txt or .docx</small>
+            </div>
+          </div>
+          <div class="upload-chosen" id="chosen-upd"></div>
+        </div>
+      </div>
+
+      <!-- Month + Year -->
+      <div class="two-col">
+        <div class="field">
+          <label class="lbl">Target month <span class="req">*</span></label>
+          <div class="month-grid" id="month-grid">
+            <button class="month-btn" data-month="Jan">Jan</button>
+            <button class="month-btn" data-month="Feb">Feb</button>
+            <button class="month-btn" data-month="Mar">Mar</button>
+            <button class="month-btn" data-month="Apr">Apr</button>
+            <button class="month-btn" data-month="May">May</button>
+            <button class="month-btn" data-month="Jun">Jun</button>
+            <button class="month-btn" data-month="Jul">Jul</button>
+            <button class="month-btn" data-month="Aug">Aug</button>
+            <button class="month-btn" data-month="Sep">Sep</button>
+            <button class="month-btn" data-month="Oct">Oct</button>
+            <button class="month-btn" data-month="Nov">Nov</button>
+            <button class="month-btn" data-month="Dec">Dec</button>
+          </div>
+        </div>
+        <div class="field">
+          <label class="lbl" for="year">Target year <span class="req">*</span></label>
+          <input type="text" id="year" value="2026" inputmode="numeric" maxlength="4" />
+        </div>
+      </div>
+
+      <button id="run" disabled>Loading Python...</button>
+
+      <div class="status" id="status">
+        <span class="spinner" id="spin"></span>
+        <span id="statusText">Starting up...</span>
+      </div>
+
+      <a id="download">Download generated document</a>
+
+      <details>
+        <summary>Show log</summary>
+        <pre id="log"></pre>
+      </details>
+
+    </div>
+  </div>
+
+  <!-- Pyodide -->
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+  <!-- Python logic -->
+  <script src="sst_code.js"></script>
+  <!-- App logic -->
+  <script src="app.js"></script>
+</body>
+</html>
