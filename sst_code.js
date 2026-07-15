@@ -191,6 +191,9 @@ with open(file_txt, "r", encoding="utf-8") as f:
     for line in f:
         line = line.strip()
 
+        if line and not re.search(r'[a-zA-Z0-9]', line):
+            continue
+
         match = pattern.search(line)
 
         if match and match.start() < 10:
