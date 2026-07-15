@@ -372,6 +372,10 @@ notes_instrunctions_shortening = ["Update for Microsoft Defender Antivirus antim
 pattern = "|".join(re.escape(x) for x in notes_instrunctions_shortening)
 df['Notes / Instrunctions'] = df['Notes / Instrunctions'].str.extract(f"({pattern})", expand=False).fillna(df["Notes / Instrunctions"]) #extract the first matching pattern from the list, if none found, keep the original value
 
+#special exceptions for .NET framework
+mask = df['Notes / Instrunctions'].str.contains(r'Cumulative Update for \.NET Framework', na=False)
+df.loc[mask, 'Notes / Instrunctions'] = "Cumulative Update for Windows"
+
 # get special exceptions for microsoft edge
 mask = df['Notes / Instrunctions'].eq("Edge Browser Security Update")
 build = df.loc[mask, 'Recommended Customer Action'].str.extract(r'(\(Build[^)]*\))', expand=False)
