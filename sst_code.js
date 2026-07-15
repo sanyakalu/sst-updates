@@ -367,14 +367,14 @@ df.loc[mask, "Notes / Instrunctions"] = df.loc[mask, "Notes / Instrunctions"].st
 # Append them to col2
 df.loc[mask, "KB numbers"] = (df.loc[mask, "KB numbers"].fillna("").astype(str) + stars)
 
+#special exceptions for .NET framework
+mask = df['Notes / Instrunctions'].str.contains(r'Cumulative Update for .NET Framework', na=False)
+df.loc[mask, 'Notes / Instrunctions'] = "Cumulative Update for Windows"
+
 #for the Notes / Instructions column, if it contains any of the following phrases, replace the entire value with that phrase (to shorten the text)
 notes_instrunctions_shortening = ["Update for Microsoft Defender Antivirus antimalware platform", "Servicing Stack Update for Windows", "Cumulative Update for Windows"]
 pattern = "|".join(re.escape(x) for x in notes_instrunctions_shortening)
 df['Notes / Instrunctions'] = df['Notes / Instrunctions'].str.extract(f"({pattern})", expand=False).fillna(df["Notes / Instrunctions"]) #extract the first matching pattern from the list, if none found, keep the original value
-
-#special exceptions for .NET framework
-mask = df['Notes / Instrunctions'].str.contains(r'Cumulative Update for \.NET Framework', na=False)
-df.loc[mask, 'Notes / Instrunctions'] = "Cumulative Update for Windows"
 
 # get special exceptions for microsoft edge
 mask = df['Notes / Instrunctions'].eq("Edge Browser Security Update")
