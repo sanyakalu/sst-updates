@@ -243,6 +243,39 @@
     }
 
     .hint { color: var(--text-soft); font-size: 0.77rem; font-weight: 500; margin-top: 5px; }
+
+    /* Version check banner */
+    #ver-banner {
+      display: none;
+      margin-top: 14px;
+      padding: 13px 14px;
+      border-radius: 10px;
+      background: #fffbeb;
+      border: 1.5px solid #fcd34d;
+      color: var(--warn);
+      font-size: 0.84rem;
+      font-weight: 600;
+    }
+    #ver-banner .ver-title {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    #ver-banner .ver-title strong { font-size: 0.87rem; }
+    #ver-banner .ver-dismiss {
+      background: none; border: none; cursor: pointer;
+      color: var(--warn); font-size: 1rem; font-weight: 800; line-height: 1;
+      padding: 0 2px;
+    }
+    #ver-banner ul { margin: 0; padding-left: 18px; line-height: 1.7; }
+    #ver-banner .ver-checking {
+      display: flex; align-items: center; gap: 8px; color: var(--text-soft);
+    }
+    .spinner-warn {
+      width: 13px; height: 13px; border-radius: 50%; flex: none;
+      border: 2px solid rgba(180,83,9,0.2);
+      border-top-color: var(--warn);
+      animation: spin 0.7s linear infinite;
+    }
   </style>
 </head>
 <body>
@@ -314,6 +347,15 @@
           <label class="lbl" for="year">Target year <span class="req">*</span></label>
           <input type="text" id="year" value="2026" inputmode="numeric" maxlength="4" />
         </div>
+      </div>
+
+      <!-- Version check warning banner (shown after update file upload) -->
+      <div id="ver-banner">
+        <div class="ver-title">
+          <strong>Version check</strong>
+          <button class="ver-dismiss" id="ver-dismiss" title="Dismiss">&#x2715;</button>
+        </div>
+        <div id="ver-body"></div>
       </div>
 
       <button id="run" disabled>Loading Python...</button>
