@@ -31,6 +31,7 @@ let pyReady       = false;
 let selectedMonth = null;
 let updBytes      = null;
 let updFileName   = "update.txt";
+let verBlocking   = false;  // true when version check found issues
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -48,7 +49,7 @@ function setStatus(text, kind, spinning) {
 function refreshRunState() {
   if (!pyReady) return;
   const yearOk = /^\d{4}$/.test(els.year.value.trim());
-  const ok = els.prevFile.files.length && updBytes && selectedMonth && yearOk;
+  const ok = els.prevFile.files.length && updBytes && selectedMonth && yearOk && !verBlocking;
   els.run.disabled = !ok;
   if (ok) els.run.textContent = "Generate document";
 }
@@ -107,109 +108,94 @@ wireZone("zone-upd",  els.updFile,  els.chosenUpd,  (bytes, name) => {
 
 els.verDismiss.addEventListener("click", () => {
   els.verBanner.style.display = "none";
+  verBlocking = false;
+  refreshRunState();
 });
 
 // ── Version checks ────────────────────────────────────────────────────────────
 
-async function runVersionChecks(bytes) {
+function runVersionChecks(bytes) {
   const text  = new TextDecoder().decode(bytes);
   const lines = text.split(/\r?\n/);
 
-  // Collect lines relevant to Edge or MSRT
   const edgeLines = lines.filter(l => /edge/i.test(l) && /version|build/i.test(l));
   const msrtLines = lines.filter(l => /windows malicious software removal tool/i.test(l) && /v\d+\.\d+/i.test(l));
 
   if (!edgeLines.length && !msrtLines.length) {
     els.verBanner.style.display = "none";
+    verBlocking = false;
+    refreshRunState();
     return;
   }
 
-  // Show "checking..." spinner while fetching
-  els.verBanner.style.display = "block";
-  els.verBody.innerHTML = '<div class="ver-checking"><span class="spinner-warn"></span>Checking versions against catalog...</div>';
+  const issuesMap = new Map();  // summary → example line (deduplicates identical messages)
 
-  const issues = [];
+  function addIssue(summary, line) {
+    if (!issuesMap.has(summary)) issuesMap.set(summary, line.trim());
+  }
 
-  // ── Edge ──
+  // ── Edge: Version major must match Build major; all builds must be consistent ──
   if (edgeLines.length) {
-    let catalogVer = null;
-    try {
-      const resp = await fetch("https://edgeupdates.microsoft.com/api/products");
-      const data = await resp.json();
-      for (const channel of data) {
-        if (channel.Product?.toLowerCase() === "stable") {
-          for (const r of (channel.Releases || [])) {
-            if (r.Platform === "Windows" && r.Architecture === "x64") {
-              catalogVer = r.ProductVersion;
-              break;
-            }
-          }
-          break;
-        }
-      }
-    } catch (e) {
-      issues.push("Edge: could not reach update API (" + e.message + ")");
-    }
+    const buildVersions = new Set(
+      edgeLines.map(l => l.match(/build\s+([\d.]+)/i)?.[1]).filter(Boolean)
+    );
 
     for (const line of edgeLines) {
-      const verMatch   = line.match(/version\s+(\d+)/i);
-      const buildMatch = line.match(/build\s+([\d.]+)/i);
-      const statedVer  = verMatch?.[1];
+      const verMatch    = line.match(/version\s+(\d+)/i);
+      const buildMatch  = line.match(/build\s+([\d.]+)/i);
+      const statedVer   = verMatch?.[1];
       const statedBuild = buildMatch?.[1];
 
-      // Internal check: Version major vs Build major
       if (statedVer && statedBuild) {
         const buildMajor = statedBuild.split(".")[0];
         if (statedVer !== buildMajor) {
-          issues.push(
-            `Edge: "Version ${statedVer}" doesn't match "Build ${statedBuild}" (major should be ${buildMajor})\n  → ${line.trim()}`
+          addIssue(
+            `Edge: "Version ${statedVer}" doesn't match "Build ${statedBuild}" — should be Version ${buildMajor}`,
+            line
           );
         }
       }
+    }
 
-      // Catalog check: build vs live version
-      if (catalogVer && statedBuild && statedBuild !== catalogVer) {
-        issues.push(
-          `Edge: build ${statedBuild} in file, catalog shows ${catalogVer}\n  → ${line.trim()}`
-        );
-      }
+    if (buildVersions.size > 1) {
+      addIssue(
+        `Edge: build numbers are inconsistent across lines — ${[...buildVersions].join(", ")}`,
+        edgeLines[0]
+      );
     }
   }
 
-  // ── MSRT ──
+  // ── MSRT: all version numbers must be consistent across lines ──
   if (msrtLines.length) {
-    let catalogVer = null;
-    try {
-      const resp = await fetch("https://www.catalog.update.microsoft.com/Search.aspx?q=KB890830");
-      const html = await resp.text();
-      const m = html.match(/Windows Malicious Software Removal Tool[^<]*v(5\.\d+)/);
-      if (m) catalogVer = m[1];
-    } catch (e) {
-      issues.push("MSRT: could not reach Microsoft catalog (" + e.message + ")");
-    }
+    const msrtVersions = new Set(
+      msrtLines.map(l => l.match(/v(5\.\d+)/i)?.[1]).filter(Boolean)
+    );
 
-    for (const line of msrtLines) {
-      const m = line.match(/v(5\.\d+)/i);
-      if (!m) continue;
-      const statedVer = m[1];
-      if (catalogVer && statedVer !== catalogVer) {
-        issues.push(
-          `MSRT: v${statedVer} in file, catalog shows v${catalogVer}\n  → ${line.trim()}`
-        );
-      }
+    if (msrtVersions.size > 1) {
+      addIssue(
+        `MSRT: inconsistent versions across lines — ${[...msrtVersions].join(", ")}. All occurrences should match.`,
+        msrtLines[0]
+      );
     }
   }
 
-  // Render result
-  if (issues.length === 0) {
-    els.verBody.innerHTML = '<span style="color:var(--ok)">&#x2713; Edge and MSRT versions look correct.</span>';
-  } else {
-    const items = issues.map(i => {
-      const [summary, detail] = i.split("\n  → ");
-      return `<li><strong>${escapeHtml(summary)}</strong>${detail ? `<br><code style="font-size:0.78rem;font-weight:500">${escapeHtml(detail)}</code>` : ""}</li>`;
-    }).join("");
-    els.verBody.innerHTML = `<ul>${items}</ul>`;
+  // ── Render ──
+  if (issuesMap.size === 0) {
+    els.verBanner.style.display = "none";
+    verBlocking = false;
+    refreshRunState();
+    return;
   }
+
+  verBlocking = true;
+  els.verBanner.style.display = "block";
+  els.verBanner.classList.add("ver-error");
+  refreshRunState();
+
+  const items = [...issuesMap.entries()].map(([summary, detail]) =>
+    `<li><strong>${escapeHtml(summary)}</strong><br><code style="font-size:0.78rem;font-weight:500">${escapeHtml(detail)}</code></li>`
+  ).join("");
+  els.verBody.innerHTML = `<ul>${items}</ul><p style="margin-top:8px;font-size:0.8rem">Fix the file and re-upload, or dismiss to proceed anyway.</p>`;
 }
 
 function escapeHtml(s) {
