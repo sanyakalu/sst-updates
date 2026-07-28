@@ -268,19 +268,14 @@ function escapeHtml(s) {
 // ── Pyodide boot ──────────────────────────────────────────────────────────────
 
 async function boot() {
-  try {
-    // Load STICR template fields from repo JSON (non-fatal if missing)
-    try {
-      const resp = await fetch("sticr_template_fields.json");
-      if (resp.ok) {
-        const raw = await resp.json();
-        templateFields = Object.entries(raw)
-          .filter(([k]) => !STICR_EXCLUDED.has(k) && raw[k] !== null)
-          .map(([k, v]) => ({ op: "add", path: `/fields/${k}`, value: v }));
-        log("Loaded STICR template fields.");
-      }
-    } catch { /* file absent or malformed — proceed without extra fields */ }
+  // Build templateFields from the script-tag global (no fetch needed)
+  if (window.STICR_TEMPLATE_FIELDS) {
+    templateFields = Object.entries(window.STICR_TEMPLATE_FIELDS)
+      .filter(([k, v]) => !STICR_EXCLUDED.has(k) && v !== null)
+      .map(([k, v]) => ({ op: "add", path: `/fields/${k}`, value: v }));
+  }
 
+  try {
     setStatus("Loading Python environment (first load downloads ~20 MB)...", "", true);
     pyodide = await loadPyodide({
       indexURL: PYODIDE_INDEX,

@@ -1,0 +1,21 @@
+window.STICR_TEMPLATE_FIELDS = {
+    "System.State": "Investigate",
+    "System.Reason": "New",
+    "Microsoft.VSTS.Common.Priority": 4,
+    "Microsoft.VSTS.Scheduling.RemainingWork": 0.0,
+    "Microsoft.VSTS.Scheduling.CompletedWork": 0.0,
+    "Philips.STI.CR.TellCT": "No",
+    "Philips.STI.CR.Origin": "Internal",
+    "Philips.STI.CR.CRType": "Enhancement",
+    "Philips.STI.CR.Severity": "Low",
+    "Microsoft.VSTS.Scheduling.OriginalEstimate": 0.0,
+    "Philips.STI.CR.RootCause.WhereProblem": "(Root Cause Analysis not done)",
+    "Philips.STI.CR.VerificationOriginalEstimate": 0.0,
+    "Philips.STI.CR.VerificationRemainingWork": 0.0,
+    "Philips.STI.CR.VerificationCompletedWork": 0.0,
+    "Philips.Common.ReasonValidation": "OK",
+    "Philips.Common.Product": "PIIC_iX",
+    "Philips.Common.Feature": "PIIC_iX/Deployment/Install",
+    "Philips.Common.WorkType": "Code",
+    "Philips.STI.CR.TellPrivacy": "No"
+};
