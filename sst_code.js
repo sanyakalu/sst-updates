@@ -941,4 +941,89 @@ for table in doc.tables:
 
 
 doc.save(output_sst_path)
+
+# ── STICR data preparation ────────────────────────────────────────────────────
+import json as _json
+
+user_input_email = os.environ.get("SST_USER_EMAIL", "")
+
+sticr_template_html = """<!DOCTYPE html>
+<html><body>
+<p><b>Author:</b> {AUTHOR}</p>
+<p><b>Date:</b> {DATE}</p>
+<p><b>Month/Year:</b> {MONTH} {YEAR}</p>
+<h3>Security Updates</h3>
+{SECURITY_UPDATES}
+</body></html>"""
+
+df['STICR product'] = (df['Product'].str.replace("Windows", "Win", regex=False)
+    .str.replace("version", "ver.", regex=False)
+    .str.replace("enterprise", "", case=False, regex=False)
+    .str.replace("ltsb", "", case=False, regex=False)
+    .str.replace("ltsc", "", case=False, regex=False)
+    .str.replace(r"[()]", "", regex=True)
+    .str.replace(r"\s+", " ", regex=True)
+    .str.strip())
+
+def add_pair_ordered(x):
+    for client, server in product_pairings:
+        if client in x or server in x:
+            return f"{client}, {server}"
+    return x
+
+df["STICR product"] = df["STICR product"].apply(add_pair_ordered)
+df['Section'] = df['Section'].str.replace(" ", "", regex=False).str.replace("-", "", regex=False)
+
+df["STICR title"] = df.apply(lambda row: (
+    f"Microsoft Security Update {month_map[month]} {year} "
+    f"({philips_product} {row['Section']}) "
+    f"{row['STICR product']}"
+), axis=1)
+
+sticrs = []
+
+for title, title_group in df.groupby("STICR title", sort=False):
+    html_parts = []
+    section_num = 1
+
+    for product, product_group in title_group.groupby("Product", sort=False):
+        section = product_group["Section"].iloc[0]
+        html_parts.append(f"<p><b>{section_num}. {section} - {product}</b></p>")
+        html_parts.append("<ol>")
+
+        for _, row in product_group.iterrows():
+            kb  = str(row["KB Updates"]).replace("’", "").replace("‘", "")
+            rca = str(row.get("Recommended Customer Action", ""))
+            html_parts.append("<li>")
+            html_parts.append(kb)
+
+            if rca and rca not in ("Install Recommended Update", "Install Recommended Update prior to other updates"):
+                installs = [i.strip() for i in re.split(r'\n\n|\\n\\n', rca) if i.strip()]
+                html_parts.append("<ol type='a'>")
+                for install in installs:
+                    html_parts.append(f"<li>{install}</li>")
+                html_parts.append("</ol>")
+
+            html_parts.append("</li>")
+        html_parts.append("</ol>")
+        section_num += 1
+
+    security_updates_html = "".join(html_parts)
+
+    has_optional = title_group["KB numbers"].astype(str).str.endswith("*").any()
+    if has_optional:
+        security_updates_html = "<p>*Patch is optional</p>" + security_updates_html
+
+    sticr_html = sticr_template_html.format(
+        DATE=datetime.now().strftime("%d-%B-%Y"),
+        MONTH=month_map[month],
+        YEAR=year,
+        SECURITY_UPDATES=security_updates_html,
+        AUTHOR=user_input_email,
+    )
+
+    sticrs.append({"title": title, "html": sticr_html})
+
+sticr_json_output = _json.dumps(sticrs)
 `;
+

@@ -7,21 +7,26 @@ const OUT_DIR = WORK + "/output";
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 
 const els = {
-  prevFile:   document.getElementById("prevFile"),
-  updFile:    document.getElementById("updFile"),
-  chosenPrev: document.getElementById("chosen-prev"),
-  chosenUpd:  document.getElementById("chosen-upd"),
-  monthGrid:  document.getElementById("month-grid"),
-  year:       document.getElementById("year"),
-  run:        document.getElementById("run"),
-  status:     document.getElementById("status"),
-  statusText: document.getElementById("statusText"),
-  spin:       document.getElementById("spin"),
-  download:   document.getElementById("download"),
-  log:        document.getElementById("log"),
-  verBanner:  document.getElementById("ver-banner"),
-  verBody:    document.getElementById("ver-body"),
-  verDismiss: document.getElementById("ver-dismiss"),
+  prevFile:    document.getElementById("prevFile"),
+  updFile:     document.getElementById("updFile"),
+  chosenPrev:  document.getElementById("chosen-prev"),
+  chosenUpd:   document.getElementById("chosen-upd"),
+  monthGrid:   document.getElementById("month-grid"),
+  year:        document.getElementById("year"),
+  userEmail:   document.getElementById("userEmail"),
+  emailErr:    document.getElementById("emailErr"),
+  patInput:    document.getElementById("patInput"),
+  patToggle:   document.getElementById("patToggle"),
+  createSticr: document.getElementById("createSticr"),
+  run:         document.getElementById("run"),
+  status:      document.getElementById("status"),
+  statusText:  document.getElementById("statusText"),
+  spin:        document.getElementById("spin"),
+  download:    document.getElementById("download"),
+  log:         document.getElementById("log"),
+  verBanner:   document.getElementById("ver-banner"),
+  verBody:     document.getElementById("ver-body"),
+  verDismiss:  document.getElementById("ver-dismiss"),
 };
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -32,6 +37,29 @@ let selectedMonth = null;
 let updBytes      = null;
 let updFileName   = "update.txt";
 let verBlocking   = false;  // true when version check found issues
+
+// ── STICR template fields (loaded from repo JSON at boot) ────────────────────
+let templateFields = [];
+
+// Fields set explicitly in createSticrs — must not be duplicated from the JSON
+const STICR_EXCLUDED = new Set([
+  "System.Title", "System.Description", "System.AreaPath",
+  "System.TeamProject", "System.IterationPath", "System.AssignedTo",
+  "System.Id", "System.Rev", "System.WorkItemType",
+  "System.CreatedDate", "System.CreatedBy", "System.ChangedDate",
+  "System.ChangedBy", "System.BoardColumn", "System.BoardColumnDone",
+  "System.CommentCount", "System.AuthorizedDate", "System.Watermark",
+  "Microsoft.VSTS.Common.StateChangeDate",
+  "Microsoft.VSTS.Common.ResolvedDate", "Microsoft.VSTS.Common.ResolvedBy",
+  "Microsoft.VSTS.Common.ClosedDate", "Microsoft.VSTS.Common.ClosedBy",
+  "Microsoft.VSTS.Build.IntegrationBuild", "Microsoft.VSTS.Build.FoundIn",
+  "Philips.Common.FoundInRelease",
+]);
+
+// ── Persist PAT in localStorage ───────────────────────────────────────────────
+const PAT_KEY = "sst_ado_pat";
+const savedPat = localStorage.getItem(PAT_KEY);
+if (savedPat) els.patInput.value = savedPat;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -46,10 +74,17 @@ function setStatus(text, kind, spinning) {
   els.spin.style.display = spinning ? "" : "none";
 }
 
+function isPhilipsEmail(v) {
+  return /^[^\s@]+@philips\.com$/i.test(v.trim());
+}
+
 function refreshRunState() {
   if (!pyReady) return;
-  const yearOk = /^\d{4}$/.test(els.year.value.trim());
-  const ok = els.prevFile.files.length && updBytes && selectedMonth && yearOk && !verBlocking;
+  const yearOk  = /^\d{4}$/.test(els.year.value.trim());
+  const emailOk = isPhilipsEmail(els.userEmail.value);
+  const patOk   = els.patInput.value.trim().length > 0;
+  const ok = els.prevFile.files.length && updBytes && selectedMonth && yearOk
+          && emailOk && patOk && !verBlocking;
   els.run.disabled = !ok;
   if (ok) els.run.textContent = "Generate document";
 }
@@ -66,6 +101,34 @@ els.monthGrid.addEventListener("click", e => {
 });
 
 els.year.addEventListener("input", refreshRunState);
+
+// ── Email validation ──────────────────────────────────────────────────────────
+els.userEmail.addEventListener("input", () => {
+  const v = els.userEmail.value;
+  if (v && !isPhilipsEmail(v)) {
+    els.emailErr.style.display = "block";
+  } else {
+    els.emailErr.style.display = "none";
+  }
+  refreshRunState();
+});
+
+// ── PAT field: persist + toggle visibility ────────────────────────────────────
+els.patInput.addEventListener("input", () => {
+  const v = els.patInput.value.trim();
+  if (v) localStorage.setItem(PAT_KEY, v);
+  else   localStorage.removeItem(PAT_KEY);
+  refreshRunState();
+});
+
+els.patToggle.addEventListener("click", () => {
+  const isHidden = els.patInput.type === "password";
+  els.patInput.type = isHidden ? "text" : "password";
+  els.patToggle.title = isHidden ? "Hide token" : "Show token";
+});
+
+// ── STICR toggle ──────────────────────────────────────────────────────────────
+els.createSticr.addEventListener("change", refreshRunState);
 
 // ── Upload zones ──────────────────────────────────────────────────────────────
 
@@ -206,6 +269,18 @@ function escapeHtml(s) {
 
 async function boot() {
   try {
+    // Load STICR template fields from repo JSON (non-fatal if missing)
+    try {
+      const resp = await fetch("sticr_template_fields.json");
+      if (resp.ok) {
+        const raw = await resp.json();
+        templateFields = Object.entries(raw)
+          .filter(([k]) => !STICR_EXCLUDED.has(k) && raw[k] !== null)
+          .map(([k, v]) => ({ op: "add", path: `/fields/${k}`, value: v }));
+        log("Loaded STICR template fields.");
+      }
+    } catch { /* file absent or malformed — proceed without extra fields */ }
+
     setStatus("Loading Python environment (first load downloads ~20 MB)...", "", true);
     pyodide = await loadPyodide({
       indexURL: PYODIDE_INDEX,
@@ -239,9 +314,12 @@ async function generate() {
   els.download.style.display = "none";
   els.log.textContent = "";
 
-  const month  = selectedMonth;
-  const year   = els.year.value.trim();
-  const updExt = updFileName.toLowerCase().endsWith(".docx") ? "docx" : "txt";
+  const month       = selectedMonth;
+  const year        = els.year.value.trim();
+  const updExt      = updFileName.toLowerCase().endsWith(".docx") ? "docx" : "txt";
+  const userEmail   = els.userEmail.value.trim();
+  const pat         = els.patInput.value.trim();
+  const doSticr     = els.createSticr.checked;
 
   try {
     setStatus("Reading uploaded files...", "", true);
@@ -258,6 +336,7 @@ async function generate() {
       PREVIOUS_SST_PATH: prevPath,
       UPDATE_FILE_PATH:  updPath,
       OUTPUT_DIRECTORY:  OUT_DIR,
+      SST_USER_EMAIL:    userEmail,
     };
     pyodide.runPython(`
 import os, json
@@ -280,7 +359,11 @@ for k, v in json.loads(${JSON.stringify(JSON.stringify(env))}).items():
     els.download.textContent = "Download " + outName;
     els.download.style.display = "block";
 
-    setStatus("Done. Your document is ready.", "ok", false);
+    if (doSticr) {
+      await createSticrs(pat, userEmail);
+    } else {
+      setStatus("Done. Your document is ready.", "ok", false);
+    }
   } catch (e) {
     console.error(e);
     const msg    = String(e.message || e);
@@ -292,6 +375,74 @@ for k, v in json.loads(${JSON.stringify(JSON.stringify(env))}).items():
     log(msg);
   } finally {
     refreshRunState();
+  }
+}
+
+// ── STICR creation ────────────────────────────────────────────────────────────
+
+async function createSticrs(pat, userEmail) {
+  const organization = "PhilipsMA";
+  const project      = "Philips.PIC";
+
+  // Retrieve the STICR data prepared by the Python script
+  let sticrData;
+  try {
+    const raw = pyodide.globals.get("sticr_json_output");
+    sticrData = JSON.parse(raw);
+  } catch (e) {
+    setStatus("STICR data not found — document saved but STICRs not created.", "warn", false);
+    log("STICR data error: " + e);
+    return;
+  }
+
+  if (!sticrData || !sticrData.length) {
+    setStatus("Done. No STICRs to create.", "ok", false);
+    return;
+  }
+
+  const createUrl = `https://dev.azure.com/${organization}/${project}/_apis/wit/workitems/$STICR?api-version=7.1`;
+  const headers   = {
+    "Content-Type": "application/json-patch+json",
+    "Authorization": "Basic " + btoa(":" + pat),
+  };
+
+  let created = 0;
+  let failed  = 0;
+
+  setStatus(`Creating ${sticrData.length} STICR(s) in Azure DevOps...`, "", true);
+
+  for (const item of sticrData) {
+    const body = [
+      { op: "add", path: "/fields/System.Title",         value: item.title },
+      { op: "add", path: "/fields/System.Description",   value: item.html },
+      { op: "add", path: "/fields/System.AreaPath",       value: project },
+      { op: "add", path: "/fields/System.TeamProject",    value: project },
+      { op: "add", path: "/fields/System.IterationPath",  value: project + "\\Common" },
+      { op: "add", path: "/fields/System.AssignedTo",     value: userEmail },
+      ...templateFields,
+    ];
+
+    try {
+      const resp = await fetch(createUrl, { method: "POST", headers, body: JSON.stringify(body) });
+      if (!resp.ok) {
+        const errText = await resp.text();
+        log(`FAILED (${resp.status}): ${item.title}\n${errText}`);
+        failed++;
+      } else {
+        const wi = await resp.json();
+        log(`Created STICR ${wi.id}: ${item.title}`);
+        created++;
+      }
+    } catch (e) {
+      log(`NETWORK ERROR for "${item.title}": ${e}`);
+      failed++;
+    }
+  }
+
+  if (failed === 0) {
+    setStatus(`Done. Document ready + ${created} STICR(s) created.`, "ok", false);
+  } else {
+    setStatus(`Document ready. ${created} STICR(s) created, ${failed} failed — see log.`, "warn", false);
   }
 }
 

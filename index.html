@@ -286,6 +286,52 @@
       border-top-color: var(--warn);
       animation: spin 0.7s linear infinite;
     }
+
+    /* PAT field — password-style with show/hide toggle */
+    .pat-wrap {
+      position: relative;
+    }
+    .pat-wrap input {
+      padding-right: 44px;
+    }
+    .pat-toggle {
+      position: absolute;
+      right: 10px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; cursor: pointer;
+      color: var(--text-soft); padding: 4px;
+      line-height: 1; font-size: 0.9rem;
+    }
+    .pat-toggle:hover { color: var(--pink-dark); }
+
+    /* STICR toggle */
+    .sticr-toggle-row {
+      display: flex; align-items: center; gap: 14px;
+      margin-bottom: 0;
+    }
+    .toggle-label { font-size: 0.9rem; font-weight: 600; color: var(--text); flex: 1; }
+    .toggle-label small { display: block; color: var(--text-soft); font-size: 0.77rem; font-weight: 500; margin-top: 2px; }
+
+    /* pill switch */
+    .switch { position: relative; display: inline-block; width: 46px; height: 26px; flex-shrink: 0; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; cursor: pointer; inset: 0;
+      background: #e5e7eb; border-radius: 26px;
+      transition: background 0.2s;
+    }
+    .slider::before {
+      content: ""; position: absolute;
+      width: 20px; height: 20px; border-radius: 50%;
+      left: 3px; bottom: 3px;
+      background: #fff;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+      transition: transform 0.2s;
+    }
+    .switch input:checked + .slider { background: linear-gradient(135deg, var(--pink-dark) 0%, var(--accent) 100%); }
+    .switch input:checked + .slider::before { transform: translateX(20px); }
+
+    /* email validation hint */
+    .field-err { color: var(--err); font-size: 0.76rem; font-weight: 600; margin-top: 4px; display: none; }
   </style>
 </head>
 <body>
@@ -334,6 +380,23 @@
         </div>
       </div>
 
+      <!-- User email -->
+      <div class="field">
+        <label class="lbl" for="userEmail">Your Philips email <span class="req">*</span></label>
+        <input type="email" id="userEmail" placeholder="name@philips.com" autocomplete="email" />
+        <div class="field-err" id="emailErr">Must be a @philips.com address.</div>
+      </div>
+
+      <!-- GitHub PAT -->
+      <div class="field">
+        <label class="lbl" for="patInput">Azure DevOps PAT <span class="req">*</span></label>
+        <div class="pat-wrap">
+          <input type="password" id="patInput" placeholder="Paste your Personal Access Token" autocomplete="off" />
+          <button class="pat-toggle" id="patToggle" type="button" title="Show / hide token">&#128065;</button>
+        </div>
+        <div class="hint">Saved locally in your browser — never sent anywhere except Azure DevOps.</div>
+      </div>
+
       <!-- Month + Year -->
       <div class="two-col">
         <div class="field">
@@ -356,6 +419,20 @@
         <div class="field">
           <label class="lbl" for="year">Target year <span class="req">*</span></label>
           <input type="text" id="year" value="2026" inputmode="numeric" maxlength="4" />
+        </div>
+      </div>
+
+      <!-- STICR creation toggle -->
+      <div class="field" style="margin-top:22px;">
+        <div class="sticr-toggle-row">
+          <div class="toggle-label">
+            Create STICRs today?
+            <small>If on, STICRs will be created in Azure DevOps after the document is generated.</small>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="createSticr" />
+            <span class="slider"></span>
+          </label>
         </div>
       </div>
 
