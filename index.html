@@ -380,21 +380,11 @@
         </div>
       </div>
 
-      <!-- User email -->
-      <div class="field">
+      <!-- User email (shown only when Create STICRs is on) -->
+      <div class="field" style="display:none;">
         <label class="lbl" for="userEmail">Your Philips email <span class="req">*</span></label>
         <input type="email" id="userEmail" placeholder="name@philips.com" autocomplete="email" />
         <div class="field-err" id="emailErr">Must be a @philips.com address.</div>
-      </div>
-
-      <!-- GitHub PAT -->
-      <div class="field">
-        <label class="lbl" for="patInput">Azure DevOps PAT <span class="req">*</span></label>
-        <div class="pat-wrap">
-          <input type="password" id="patInput" placeholder="Paste your Personal Access Token" autocomplete="off" />
-          <button class="pat-toggle" id="patToggle" type="button" title="Show / hide token">&#128065;</button>
-        </div>
-        <div class="hint">Saved locally in your browser — never sent anywhere except Azure DevOps.</div>
       </div>
 
       <!-- Month + Year -->

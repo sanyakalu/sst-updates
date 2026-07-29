@@ -15,8 +15,6 @@ const els = {
   year:        document.getElementById("year"),
   userEmail:   document.getElementById("userEmail"),
   emailErr:    document.getElementById("emailErr"),
-  patInput:    document.getElementById("patInput"),
-  patToggle:   document.getElementById("patToggle"),
   createSticr: document.getElementById("createSticr"),
   run:         document.getElementById("run"),
   status:      document.getElementById("status"),
@@ -56,10 +54,9 @@ const STICR_EXCLUDED = new Set([
   "Philips.Common.FoundInRelease",
 ]);
 
-// ── Persist PAT in localStorage ───────────────────────────────────────────────
-const PAT_KEY = "sst_ado_pat";
-const savedPat = localStorage.getItem(PAT_KEY);
-if (savedPat) els.patInput.value = savedPat;
+// PAT is injected at build time via GitHub Actions (SST_ADO_PAT secret).
+// The placeholder below is replaced during the CI build step.
+const INJECTED_PAT = "%%SST_ADO_PAT%%";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -80,13 +77,18 @@ function isPhilipsEmail(v) {
 
 function refreshRunState() {
   if (!pyReady) return;
-  const yearOk  = /^\d{4}$/.test(els.year.value.trim());
-  const emailOk = isPhilipsEmail(els.userEmail.value);
-  const patOk   = els.patInput.value.trim().length > 0;
+  const yearOk   = /^\d{4}$/.test(els.year.value.trim());
+  const doSticr  = els.createSticr.checked;
+  const emailOk  = !doSticr || isPhilipsEmail(els.userEmail.value);
+  const patOk    = !doSticr || (INJECTED_PAT !== "%%SST_ADO_PAT%%" && INJECTED_PAT.trim().length > 0);
   const ok = els.prevFile.files.length && updBytes && selectedMonth && yearOk
           && emailOk && patOk && !verBlocking;
   els.run.disabled = !ok;
   if (ok) els.run.textContent = "Generate document";
+
+  // Show/hide email field based on STICR toggle
+  const emailField = els.userEmail.closest(".field");
+  if (emailField) emailField.style.display = doSticr ? "" : "none";
 }
 
 // ── Month grid ────────────────────────────────────────────────────────────────
@@ -111,20 +113,6 @@ els.userEmail.addEventListener("input", () => {
     els.emailErr.style.display = "none";
   }
   refreshRunState();
-});
-
-// ── PAT field: persist + toggle visibility ────────────────────────────────────
-els.patInput.addEventListener("input", () => {
-  const v = els.patInput.value.trim();
-  if (v) localStorage.setItem(PAT_KEY, v);
-  else   localStorage.removeItem(PAT_KEY);
-  refreshRunState();
-});
-
-els.patToggle.addEventListener("click", () => {
-  const isHidden = els.patInput.type === "password";
-  els.patInput.type = isHidden ? "text" : "password";
-  els.patToggle.title = isHidden ? "Hide token" : "Show token";
 });
 
 // ── STICR toggle ──────────────────────────────────────────────────────────────
@@ -313,7 +301,7 @@ async function generate() {
   const year        = els.year.value.trim();
   const updExt      = updFileName.toLowerCase().endsWith(".docx") ? "docx" : "txt";
   const userEmail   = els.userEmail.value.trim();
-  const pat         = els.patInput.value.trim();
+  const pat         = INJECTED_PAT;
   const doSticr     = els.createSticr.checked;
 
   try {
@@ -377,9 +365,8 @@ for k, v in json.loads(${JSON.stringify(JSON.stringify(env))}).items():
 
 async function createSticrs(pat, userEmail) {
   const organization = "PhilipsMA";
-  const project      = "Philips.PIC";
+  const project      = "Sandbox";
 
-  // Retrieve the STICR data prepared by the Python script
   let sticrData;
   try {
     const raw = pyodide.globals.get("sticr_json_output");
@@ -403,6 +390,7 @@ async function createSticrs(pat, userEmail) {
 
   let created = 0;
   let failed  = 0;
+  const createdItems = [];  // { id, title, url }
 
   setStatus(`Creating ${sticrData.length} STICR(s) in Azure DevOps...`, "", true);
 
@@ -425,7 +413,9 @@ async function createSticrs(pat, userEmail) {
         failed++;
       } else {
         const wi = await resp.json();
+        const wiUrl = `https://dev.azure.com/${organization}/${project}/_workitems/edit/${wi.id}`;
         log(`Created STICR ${wi.id}: ${item.title}`);
+        createdItems.push({ id: wi.id, title: item.title, url: wiUrl });
         created++;
       }
     } catch (e) {
@@ -439,6 +429,59 @@ async function createSticrs(pat, userEmail) {
   } else {
     setStatus(`Document ready. ${created} STICR(s) created, ${failed} failed — see log.`, "warn", false);
   }
+
+  if (createdItems.length > 0) {
+    showSticrPopup(createdItems);
+  }
+}
+
+function showSticrPopup(items) {
+  const existing = document.getElementById("sticr-popup-overlay");
+  if (existing) existing.remove();
+
+  const rows = items.map(item =>
+    `<li style="margin-bottom:10px;">
+      <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener"
+         style="font-weight:700;color:var(--pink-dark);text-decoration:none;font-size:0.92rem;">
+        #${item.id}
+      </a>
+      <span style="color:var(--text-soft);font-size:0.82rem;margin-left:6px;">${escapeHtml(item.title)}</span>
+    </li>`
+  ).join("");
+
+  const overlay = document.createElement("div");
+  overlay.id = "sticr-popup-overlay";
+  overlay.style.cssText = `
+    position:fixed;inset:0;background:rgba(74,25,66,0.45);z-index:1000;
+    display:flex;align-items:center;justify-content:center;padding:20px;
+  `;
+
+  overlay.innerHTML = `
+    <div style="
+      background:#fff;border-radius:20px;padding:28px 32px;max-width:560px;width:100%;
+      box-shadow:0 12px 48px rgba(219,39,119,0.22);border:1.5px solid var(--pink-mid);
+      max-height:80vh;overflow-y:auto;
+    ">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <strong style="font-size:1.05rem;color:var(--pink-dark);">
+          STICRs created (${items.length})
+        </strong>
+        <button id="sticr-popup-close" style="
+          background:none;border:none;cursor:pointer;font-size:1.1rem;
+          color:var(--text-soft);padding:2px 6px;font-weight:800;line-height:1;
+        " title="Close">&#x2715;</button>
+      </div>
+      <ul style="list-style:none;padding:0;margin:0 0 16px 0;">${rows}</ul>
+      <p style="font-size:0.77rem;color:var(--text-soft);margin:0;">
+        Click any ID to open the STICR in Azure DevOps.
+      </p>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  document.getElementById("sticr-popup-close").addEventListener("click", () => overlay.remove());
+  overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
 }
 
 els.run.addEventListener("click", generate);
