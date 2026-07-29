@@ -13,14 +13,17 @@ const els = {
   chosenUpd:   document.getElementById("chosen-upd"),
   monthGrid:   document.getElementById("month-grid"),
   year:        document.getElementById("year"),
-  userEmail:   document.getElementById("userEmail"),
-  emailErr:    document.getElementById("emailErr"),
-  createSticr: document.getElementById("createSticr"),
-  run:         document.getElementById("run"),
-  status:      document.getElementById("status"),
-  statusText:  document.getElementById("statusText"),
-  spin:        document.getElementById("spin"),
-  download:    document.getElementById("download"),
+  userEmail:     document.getElementById("userEmail"),
+  emailErr:      document.getElementById("emailErr"),
+  emailReveal:   document.getElementById("emailReveal"),
+  createSticr:   document.getElementById("createSticr"),
+  createQualReg: document.getElementById("createQualReg"),
+  run:           document.getElementById("run"),
+  status:        document.getElementById("status"),
+  statusText:    document.getElementById("statusText"),
+  spin:          document.getElementById("spin"),
+  download:      document.getElementById("download"),
+  downloadCsv:   document.getElementById("download-csv"),
   log:         document.getElementById("log"),
   verBanner:   document.getElementById("ver-banner"),
   verBody:     document.getElementById("ver-body"),
@@ -85,9 +88,7 @@ function refreshRunState() {
   els.run.disabled = !ok;
   if (ok) els.run.textContent = "Generate document";
 
-  // Show/hide email field based on STICR toggle
-  const emailField = els.userEmail.closest(".field");
-  if (emailField) emailField.style.display = doSticr ? "" : "none";
+  els.emailReveal.style.display = doSticr ? "" : "none";
 }
 
 // ── Month grid ────────────────────────────────────────────────────────────────
@@ -114,8 +115,9 @@ els.userEmail.addEventListener("input", () => {
   refreshRunState();
 });
 
-// ── STICR toggle ──────────────────────────────────────────────────────────────
+// ── STICR / qual registry toggles ────────────────────────────────────────────
 els.createSticr.addEventListener("change", refreshRunState);
+els.createQualReg.addEventListener("change", refreshRunState);
 
 // ── Upload zones ──────────────────────────────────────────────────────────────
 
@@ -301,6 +303,7 @@ async function boot() {
 async function generate() {
   els.run.disabled = true;
   els.download.style.display = "none";
+  els.downloadCsv.style.display = "none";
   els.log.textContent = "";
 
   const month       = selectedMonth;
@@ -309,6 +312,7 @@ async function generate() {
   const userEmail   = els.userEmail.value.trim();
   const pat         = INJECTED_PAT;
   const doSticr     = els.createSticr.checked;
+  const doQualReg   = els.createQualReg.checked;
 
   try {
     setStatus("Reading uploaded files...", "", true);
@@ -347,6 +351,23 @@ for k, v in json.loads(${JSON.stringify(JSON.stringify(env))}).items():
     els.download.download    = outName;
     els.download.textContent = "Download " + outName;
     els.download.style.display = "block";
+
+    if (doQualReg) {
+      try {
+        const csvText = pyodide.globals.get("qual_registry_csv_output");
+        if (csvText) {
+          const csvBlob = new Blob([csvText], { type: "text/csv" });
+          const csvUrl  = URL.createObjectURL(csvBlob);
+          const csvName = `Qualification_Registry_${month}_${year}.csv`;
+          els.downloadCsv.href        = csvUrl;
+          els.downloadCsv.download    = csvName;
+          els.downloadCsv.textContent = "Download " + csvName;
+          els.downloadCsv.style.display = "block";
+        }
+      } catch (e) {
+        log("CSV generation error: " + e);
+      }
+    }
 
     if (doSticr) {
       await createSticrs(pat, userEmail);
