@@ -199,24 +199,31 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* Download link */
-    #download {
+    /* Download links */
+    #download, #download-csv {
       display: none;
       margin-top: 14px;
       width: 100%;
       text-align: center;
       text-decoration: none;
-      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
       color: #fff;
       font-family: "Nunito", sans-serif;
       font-weight: 800;
       font-size: 0.95rem;
       padding: 13px 20px;
       border-radius: 12px;
-      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.28);
       transition: opacity 0.15s, transform 0.12s;
     }
+    #download {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.28);
+    }
     #download:hover { opacity: 0.9; transform: translateY(-1px); }
+    #download-csv {
+      background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
+      box-shadow: 0 4px 14px rgba(8, 145, 178, 0.28);
+    }
+    #download-csv:hover { opacity: 0.9; transform: translateY(-1px); }
 
     /* Log */
     details { margin-top: 16px; }
@@ -287,23 +294,7 @@
       animation: spin 0.7s linear infinite;
     }
 
-    /* PAT field — password-style with show/hide toggle */
-    .pat-wrap {
-      position: relative;
-    }
-    .pat-wrap input {
-      padding-right: 44px;
-    }
-    .pat-toggle {
-      position: absolute;
-      right: 10px; top: 50%; transform: translateY(-50%);
-      background: none; border: none; cursor: pointer;
-      color: var(--text-soft); padding: 4px;
-      line-height: 1; font-size: 0.9rem;
-    }
-    .pat-toggle:hover { color: var(--pink-dark); }
-
-    /* STICR toggle */
+    /* STICR toggle row */
     .sticr-toggle-row {
       display: flex; align-items: center; gap: 14px;
       margin-bottom: 0;
@@ -354,16 +345,28 @@
       box-shadow: 0 0 0 3px rgba(244,114,182,0.18);
     }
 
+    /* STICR-needs-monthly inline warning */
+    #sticr-warning {
+      margin-top: 6px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--warn);
+      background: #fffbeb;
+      border: 1px solid #fcd34d;
+      border-radius: 8px;
+      padding: 6px 10px;
+    }
+
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>SST Update Generator</h1>
-    <p class="sub">Upload last month's Security Status Table and this month's update file, pick the target month, and download the generated document.</p>
+    <p class="sub">Upload last month's Security Status Table, choose what to generate, and download the results.</p>
 
     <div class="card">
 
-      <!-- Previous SST -->
+      <!-- Previous SST — always shown -->
       <div class="field">
         <label class="lbl" for="prevFile">Previous SST document <span class="req">*</span></label>
         <div class="upload-zone" id="zone-prev">
@@ -382,77 +385,109 @@
         </div>
       </div>
 
-      <!-- Monthly update file -->
-      <div class="field">
-        <label class="lbl">Monthly update file <span class="req">*</span></label>
-
-        <div class="upload-zone" id="zone-upd">
-          <input type="file" id="updFile" accept=".txt,.docx" />
-          <div class="upload-inner">
-            <svg class="upload-icon" width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
-                d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 12V4m0 0L8 8m4-4l4 4"/>
-            </svg>
-            <div class="upload-text">
-              <strong>Click to upload</strong> or drag and drop
-              <small>This month's patch list — .txt or .docx</small>
-            </div>
-          </div>
-          <div class="upload-chosen" id="chosen-upd"></div>
-        </div>
-      </div>
-
-      <!-- Month + Year -->
-      <div class="two-col">
-        <div class="field">
-          <label class="lbl">Target month <span class="req">*</span></label>
-          <div class="month-grid" id="month-grid">
-            <button class="month-btn" data-month="Jan">Jan</button>
-            <button class="month-btn" data-month="Feb">Feb</button>
-            <button class="month-btn" data-month="Mar">Mar</button>
-            <button class="month-btn" data-month="Apr">Apr</button>
-            <button class="month-btn" data-month="May">May</button>
-            <button class="month-btn" data-month="Jun">Jun</button>
-            <button class="month-btn" data-month="Jul">Jul</button>
-            <button class="month-btn" data-month="Aug">Aug</button>
-            <button class="month-btn" data-month="Sep">Sep</button>
-            <button class="month-btn" data-month="Oct">Oct</button>
-            <button class="month-btn" data-month="Nov">Nov</button>
-            <button class="month-btn" data-month="Dec">Dec</button>
-          </div>
-        </div>
-        <div class="field">
-          <label class="lbl" for="year">Target year <span class="req">*</span></label>
-          <input type="text" id="year" value="2026" inputmode="numeric" maxlength="4" />
-        </div>
-      </div>
-
-      <!-- STICR creation toggle + email reveal -->
-      <div class="field" style="margin-top:22px;">
+      <!-- Three toggles -->
+      <div class="field" style="margin-bottom:10px;">
         <div class="sticr-toggle-row">
           <div class="toggle-label">
-            Create STICRs today?
-            <small>If on, STICRs will be created in Azure DevOps after the document is generated.</small>
+            Fill out monthly SST updates?
+            <small>Generates the updated Security Status Table document.</small>
           </div>
           <label class="switch">
-            <input type="checkbox" id="createSticr" />
+            <input type="checkbox" id="doMonthly" />
             <span class="slider"></span>
           </label>
         </div>
-        <div class="email-reveal" id="emailReveal">
-          <label class="lbl" for="userEmail">Your Philips email <span class="req">*</span></label>
-          <input type="email" id="userEmail" placeholder="name@philips.com" autocomplete="email" />
-          <div class="field-err" id="emailErr">Must be a @philips.com address.</div>
+      </div>
+
+      <div class="field" style="margin-bottom:10px;">
+        <div class="sticr-toggle-row">
+          <div class="toggle-label">
+            Create STICRs?
+            <small>Creates STICRs in Azure DevOps after document generation.</small>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="doSticr" />
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div id="sticr-warning" style="display:none;">&#x24D8; Enable &#x2018;Fill out monthly SST updates&#x2019; to also create STICRs.</div>
+      </div>
+
+      <div class="field" style="margin-bottom:22px;">
+        <div class="sticr-toggle-row">
+          <div class="toggle-label">
+            Create historical qualification file?
+            <small>Generates a qualification registry CSV from the previous SST.</small>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="doQualReg" />
+            <span class="slider"></span>
+          </label>
         </div>
       </div>
 
-      <!-- Version check warning banner (shown after update file upload) -->
+      <!-- Conditional: update file upload (shown when doMonthly) -->
+      <div id="upd-section" style="display:none;">
+        <div class="field">
+          <label class="lbl">Monthly update file <span class="req">*</span></label>
+          <div class="upload-zone" id="zone-upd">
+            <input type="file" id="updFile" accept=".txt,.docx" />
+            <div class="upload-inner">
+              <svg class="upload-icon" width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                  d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 12V4m0 0L8 8m4-4l4 4"/>
+              </svg>
+              <div class="upload-text">
+                <strong>Click to upload</strong> or drag and drop
+                <small>This month's patch list — .txt or .docx</small>
+              </div>
+            </div>
+            <div class="upload-chosen" id="chosen-upd"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Conditional: month + year (shown when doMonthly) -->
+      <div id="month-year-section" style="display:none;">
+        <div class="two-col">
+          <div class="field">
+            <label class="lbl">Target month <span class="req">*</span></label>
+            <div class="month-grid" id="month-grid">
+              <button class="month-btn" data-month="Jan">Jan</button>
+              <button class="month-btn" data-month="Feb">Feb</button>
+              <button class="month-btn" data-month="Mar">Mar</button>
+              <button class="month-btn" data-month="Apr">Apr</button>
+              <button class="month-btn" data-month="May">May</button>
+              <button class="month-btn" data-month="Jun">Jun</button>
+              <button class="month-btn" data-month="Jul">Jul</button>
+              <button class="month-btn" data-month="Aug">Aug</button>
+              <button class="month-btn" data-month="Sep">Sep</button>
+              <button class="month-btn" data-month="Oct">Oct</button>
+              <button class="month-btn" data-month="Nov">Nov</button>
+              <button class="month-btn" data-month="Dec">Dec</button>
+            </div>
+          </div>
+          <div class="field">
+            <label class="lbl" for="year">Target year <span class="req">*</span></label>
+            <input type="text" id="year" value="2026" inputmode="numeric" maxlength="4" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Conditional: version check banner (shown when doMonthly + update file has issues) -->
       <div id="ver-banner">
         <div class="ver-title">
           <strong>Version check</strong>
           <button class="ver-dismiss" id="ver-dismiss" title="Dismiss">&#x2715;</button>
         </div>
         <div id="ver-body"></div>
+      </div>
+
+      <!-- Conditional: email reveal (shown when doSticr AND doMonthly) -->
+      <div class="email-reveal" id="emailReveal">
+        <label class="lbl" for="userEmail">Your Philips email <span class="req">*</span></label>
+        <input type="email" id="userEmail" placeholder="name@philips.com" autocomplete="email" />
+        <div class="field-err" id="emailErr">Must be a @philips.com address.</div>
       </div>
 
       <button id="run" disabled>Loading Python...</button>
@@ -462,7 +497,8 @@
         <span id="statusText">Starting up...</span>
       </div>
 
-      <a id="download">Download generated document</a>
+      <a id="download" style="display:none;">Download generated document</a>
+      <a id="download-csv" style="display:none;">Download qualification CSV</a>
 
       <details>
         <summary>Show log</summary>
@@ -476,6 +512,8 @@
   <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
   <!-- Python logic -->
   <script src="sst_code.js"></script>
+  <!-- Qualification CSV Python logic -->
+  <script src="qual_code.js"></script>
   <!-- STICR template fields -->
   <script src="sticr_template_fields.js"></script>
   <!-- STICR HTML template -->

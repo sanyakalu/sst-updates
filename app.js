@@ -3,29 +3,36 @@
 const PYODIDE_INDEX = "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/";
 const WORK    = "/work";
 const OUT_DIR = WORK + "/output";
+const INJECTED_PAT = "%%SST_ADO_PAT%%";
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 
 const els = {
-  prevFile:    document.getElementById("prevFile"),
-  updFile:     document.getElementById("updFile"),
-  chosenPrev:  document.getElementById("chosen-prev"),
-  chosenUpd:   document.getElementById("chosen-upd"),
-  monthGrid:   document.getElementById("month-grid"),
-  year:        document.getElementById("year"),
-  userEmail:   document.getElementById("userEmail"),
-  emailErr:    document.getElementById("emailErr"),
-  emailReveal: document.getElementById("emailReveal"),
-  createSticr: document.getElementById("createSticr"),
-  run:         document.getElementById("run"),
-  status:      document.getElementById("status"),
-  statusText:  document.getElementById("statusText"),
-  spin:        document.getElementById("spin"),
-  download:    document.getElementById("download"),
-  log:         document.getElementById("log"),
-  verBanner:   document.getElementById("ver-banner"),
-  verBody:     document.getElementById("ver-body"),
-  verDismiss:  document.getElementById("ver-dismiss"),
+  prevFile:         document.getElementById("prevFile"),
+  updFile:          document.getElementById("updFile"),
+  chosenPrev:       document.getElementById("chosen-prev"),
+  chosenUpd:        document.getElementById("chosen-upd"),
+  monthGrid:        document.getElementById("month-grid"),
+  year:             document.getElementById("year"),
+  userEmail:        document.getElementById("userEmail"),
+  emailErr:         document.getElementById("emailErr"),
+  emailReveal:      document.getElementById("emailReveal"),
+  doMonthly:        document.getElementById("doMonthly"),
+  doSticr:          document.getElementById("doSticr"),
+  doQualReg:        document.getElementById("doQualReg"),
+  updSection:       document.getElementById("upd-section"),
+  monthYearSection: document.getElementById("month-year-section"),
+  sticrWarning:     document.getElementById("sticr-warning"),
+  run:              document.getElementById("run"),
+  status:           document.getElementById("status"),
+  statusText:       document.getElementById("statusText"),
+  spin:             document.getElementById("spin"),
+  download:         document.getElementById("download"),
+  downloadCsv:      document.getElementById("download-csv"),
+  log:              document.getElementById("log"),
+  verBanner:        document.getElementById("ver-banner"),
+  verBody:          document.getElementById("ver-body"),
+  verDismiss:       document.getElementById("ver-dismiss"),
 };
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -55,10 +62,6 @@ const STICR_EXCLUDED = new Set([
   "Philips.Common.FoundInRelease",
 ]);
 
-// PAT is injected at build time via GitHub Actions (SST_ADO_PAT secret).
-// The placeholder below is replaced during the CI build step.
-const INJECTED_PAT = "%%SST_ADO_PAT%%";
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function log(line) {
@@ -76,19 +79,72 @@ function isPhilipsEmail(v) {
   return /^[^\s@]+@philips\.com$/i.test(v.trim());
 }
 
+// ── Refresh run state ─────────────────────────────────────────────────────────
+
 function refreshRunState() {
-  const doSticr = els.createSticr.checked;
+  const doMonthly = els.doMonthly.checked;
+  const doSticr   = els.doSticr.checked;
+  const doQualReg = els.doQualReg.checked;
 
-  // Email reveal is independent of pyReady — show/hide immediately on toggle
-  els.emailReveal.style.display = doSticr ? "" : "none";
+  // Show/hide conditional sections (no pyReady gate — layout updates immediately)
+  els.updSection.style.display       = doMonthly ? "block" : "none";
+  els.monthYearSection.style.display = doMonthly ? "block" : "none";
 
-  if (!pyReady) return;
-  const yearOk  = /^\d{4}$/.test(els.year.value.trim());
-  const emailOk = !doSticr || isPhilipsEmail(els.userEmail.value);
-  const ok = els.prevFile.files.length && updBytes && selectedMonth && yearOk
-          && emailOk && !verBlocking;
+  // STICR warning: shown when STICR on but monthly off
+  els.sticrWarning.style.display = (doSticr && !doMonthly) ? "block" : "none";
+
+  // Email reveal: shown when both STICR and monthly are on (independent of pyReady)
+  els.emailReveal.style.display = (doSticr && doMonthly) ? "block" : "none";
+
+  // Email error hint
+  if (els.userEmail.value && !isPhilipsEmail(els.userEmail.value)) {
+    els.emailErr.style.display = "block";
+  } else {
+    els.emailErr.style.display = "none";
+  }
+
+  // Determine run button label
+  const noneToggled = !doMonthly && !doSticr && !doQualReg;
+  let label;
+  if (noneToggled) {
+    label = "Select at least one option";
+  } else if (doMonthly && doSticr && doQualReg) {
+    label = "Generate document + STICRs + qualification CSV";
+  } else if (doMonthly && doSticr) {
+    label = "Generate document + create STICRs";
+  } else if (doMonthly && doQualReg) {
+    label = "Generate document + qualification CSV";
+  } else if (doMonthly) {
+    label = "Generate document";
+  } else if (doQualReg) {
+    label = "Generate qualification CSV";
+  } else {
+    // doSticr only (doMonthly is off, warning is shown)
+    label = "Select at least one option";
+  }
+
+  if (!pyReady) {
+    els.run.disabled = true;
+    return;
+  }
+
+  // Compute ok
+  let ok = els.prevFile.files.length > 0 && !verBlocking;
+
+  if (noneToggled || (doSticr && !doMonthly && !doQualReg)) {
+    ok = false;
+  } else {
+    if (doMonthly) {
+      const yearOk = /^\d{4}$/.test(els.year.value.trim());
+      ok = ok && !!updBytes && !!selectedMonth && yearOk;
+    }
+    if (doSticr && doMonthly) {
+      ok = ok && isPhilipsEmail(els.userEmail.value);
+    }
+  }
+
   els.run.disabled = !ok;
-  if (ok) els.run.textContent = "Generate document";
+  els.run.textContent = label;
 }
 
 // ── Month grid ────────────────────────────────────────────────────────────────
@@ -105,18 +161,12 @@ els.monthGrid.addEventListener("click", e => {
 els.year.addEventListener("input", refreshRunState);
 
 // ── Email validation ──────────────────────────────────────────────────────────
-els.userEmail.addEventListener("input", () => {
-  const v = els.userEmail.value;
-  if (v && !isPhilipsEmail(v)) {
-    els.emailErr.style.display = "block";
-  } else {
-    els.emailErr.style.display = "none";
-  }
-  refreshRunState();
-});
+els.userEmail.addEventListener("input", refreshRunState);
 
-// ── STICR toggle ──────────────────────────────────────────────────────────────
-els.createSticr.addEventListener("change", refreshRunState);
+// ── Toggle wiring ─────────────────────────────────────────────────────────────
+els.doMonthly.addEventListener("change", refreshRunState);
+els.doSticr.addEventListener("change",   refreshRunState);
+els.doQualReg.addEventListener("change", refreshRunState);
 
 // ── Upload zones ──────────────────────────────────────────────────────────────
 
@@ -302,58 +352,114 @@ async function boot() {
 async function generate() {
   els.run.disabled = true;
   els.download.style.display = "none";
+  els.downloadCsv.style.display = "none";
   els.log.textContent = "";
+
+  const doMonthly = els.doMonthly.checked;
+  const doSticr   = els.doSticr.checked;
+  const doQualReg = els.doQualReg.checked;
 
   const month     = selectedMonth;
   const year      = els.year.value.trim();
   const updExt    = updFileName.toLowerCase().endsWith(".docx") ? "docx" : "txt";
   const userEmail = els.userEmail.value.trim();
   const pat       = INJECTED_PAT;
-  const doSticr   = els.createSticr.checked;
 
   try {
     setStatus("Reading uploaded files...", "", true);
     const prevBytes = new Uint8Array(await els.prevFile.files[0].arrayBuffer());
 
     const prevPath = WORK + "/previous.docx";
-    const updPath  = WORK + "/update." + updExt;
     pyodide.FS.writeFile(prevPath, prevBytes);
-    pyodide.FS.writeFile(updPath,  updBytes);
 
-    const env = {
-      SST_MONTH:         month,
-      SST_YEAR:          year,
+    // Always set PREVIOUS_SST_PATH (used by both monthly and qual reg)
+    const baseEnv = {
       PREVIOUS_SST_PATH: prevPath,
-      UPDATE_FILE_PATH:  updPath,
-      OUTPUT_DIRECTORY:  OUT_DIR,
-      SST_USER_EMAIL:    userEmail,
     };
     pyodide.runPython(`
 import os, json
-for k, v in json.loads(${JSON.stringify(JSON.stringify(env))}).items():
+for k, v in json.loads(${JSON.stringify(JSON.stringify(baseEnv))}).items():
     os.environ[k] = v
 `);
 
-    setStatus("Generating document...", "", true);
-    await pyodide.runPythonAsync(window.SST_PYTHON);
+    // ── Monthly SST update ────────────────────────────────────────────────────
+    if (doMonthly) {
+      const updPath = WORK + "/update." + updExt;
+      pyodide.FS.writeFile(updPath, updBytes);
 
-    const outName  = `PIC iX_Security_Status_Table_${month}_${year}.docx`;
-    const outBytes = pyodide.FS.readFile(OUT_DIR + "/" + outName);
+      const monthlyEnv = {
+        SST_MONTH:        month,
+        SST_YEAR:         year,
+        UPDATE_FILE_PATH: updPath,
+        OUTPUT_DIRECTORY: OUT_DIR,
+        SST_USER_EMAIL:   userEmail,
+      };
+      pyodide.runPython(`
+import os, json
+for k, v in json.loads(${JSON.stringify(JSON.stringify(monthlyEnv))}).items():
+    os.environ[k] = v
+`);
 
-    const blob = new Blob([outBytes], {
-      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    });
-    const url = URL.createObjectURL(blob);
-    els.download.href        = url;
-    els.download.download    = outName;
-    els.download.textContent = "Download " + outName;
-    els.download.style.display = "block";
+      setStatus("Generating document...", "", true);
+      await pyodide.runPythonAsync(window.SST_PYTHON);
 
-    if (doSticr) {
-      await createSticrs(pat, userEmail);
-    } else {
-      setStatus("Done. Your document is ready.", "ok", false);
+      const outName  = `PIC iX_Security_Status_Table_${month}_${year}.docx`;
+      const outBytes = pyodide.FS.readFile(OUT_DIR + "/" + outName);
+
+      const blob = new Blob([outBytes], {
+        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      });
+      const url = URL.createObjectURL(blob);
+      els.download.href        = url;
+      els.download.download    = outName;
+      els.download.textContent = "Download " + outName;
+      els.download.style.display = "block";
     }
+
+    // ── STICRs ────────────────────────────────────────────────────────────────
+    if (doSticr && doMonthly) {
+      await createSticrs(pat, userEmail);
+    }
+
+    // ── Qualification CSV ─────────────────────────────────────────────────────
+    if (doQualReg) {
+      // SST_MONTH and SST_YEAR may be needed by QUAL_PYTHON even if monthly is off;
+      // set them from the year field (best effort — required if doMonthly is also on)
+      const qualEnv = {
+        SST_MONTH: selectedMonth || "",
+        SST_YEAR:  els.year.value.trim(),
+      };
+      pyodide.runPython(`
+import os, json
+for k, v in json.loads(${JSON.stringify(JSON.stringify(qualEnv))}).items():
+    os.environ[k] = v
+`);
+
+      setStatus("Generating qualification CSV...", "", true);
+      await pyodide.runPythonAsync(window.QUAL_PYTHON);
+
+      const csvContent = pyodide.globals.get("qual_registry_csv_output");
+      if (csvContent) {
+        const csvBlob = new Blob([csvContent], { type: "text/csv" });
+        const csvUrl  = URL.createObjectURL(csvBlob);
+        const csvName = selectedMonth
+          ? `Qualification_Registry_${selectedMonth}_${els.year.value.trim()}.csv`
+          : `Qualification_Registry_${els.year.value.trim()}.csv`;
+        els.downloadCsv.href        = csvUrl;
+        els.downloadCsv.download    = csvName;
+        els.downloadCsv.textContent = "Download " + csvName;
+        els.downloadCsv.style.display = "block";
+      } else {
+        log("Warning: qual_registry_csv_output was empty or not set.");
+      }
+    }
+
+    // ── Final status ──────────────────────────────────────────────────────────
+    if (!doSticr || !doMonthly) {
+      // createSticrs sets its own final status; only set here if STICRs weren't run
+      setStatus("Done. Your output is ready.", "ok", false);
+    }
+
   } catch (e) {
     console.error(e);
     const msg    = String(e.message || e);
