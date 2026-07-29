@@ -947,14 +947,12 @@ import json as _json
 
 user_input_email = os.environ.get("SST_USER_EMAIL", "")
 
-sticr_template_html = """<!DOCTYPE html>
-<html><body>
-<p><b>Author:</b> {AUTHOR}</p>
-<p><b>Date:</b> {DATE}</p>
-<p><b>Month/Year:</b> {MONTH} {YEAR}</p>
-<h3>Security Updates</h3>
-{SECURITY_UPDATES}
-</body></html>"""
+_template_path = "/work/sticr_template.html"
+try:
+    with open(_template_path, "r", encoding="utf-8") as _f:
+        sticr_template_html = _f.read()
+except OSError:
+    sticr_template_html = "<div>{DATE}/{AUTHOR}</div><div>{MONTH} {YEAR} Security Updates:</div>{SECURITY_UPDATES}"
 
 df['STICR product'] = (df['Product'].str.replace("Windows", "Win", regex=False)
     .str.replace("version", "ver.", regex=False)

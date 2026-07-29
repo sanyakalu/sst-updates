@@ -263,6 +263,13 @@ async function boot() {
       .map(([k, v]) => ({ op: "add", path: `/fields/${k}`, value: v }));
   }
 
+  // Fetch the STICR HTML template committed alongside index.html
+  let sticrTemplateHtml = null;
+  try {
+    const resp = await fetch("Sticr_template.html");
+    if (resp.ok) sticrTemplateHtml = await resp.text();
+  } catch { /* fall back to inline template in sst_code.js */ }
+
   try {
     setStatus("Loading Python environment (first load downloads ~20 MB)...", "", true);
     pyodide = await loadPyodide({
@@ -279,6 +286,11 @@ async function boot() {
     await micropip.install(["python-docx", "python-dateutil"]);
 
     try { pyodide.FS.mkdir(WORK); } catch { /* already exists */ }
+
+    // Write the STICR HTML template into Pyodide's filesystem so Python can open it
+    if (sticrTemplateHtml) {
+      pyodide.FS.writeFile(WORK + "/sticr_template.html", sticrTemplateHtml, { encoding: "utf8" });
+    }
 
     pyReady = true;
     setStatus("Ready. Choose your files and click Generate.", "ok", false);
