@@ -13,17 +13,15 @@ const els = {
   chosenUpd:   document.getElementById("chosen-upd"),
   monthGrid:   document.getElementById("month-grid"),
   year:        document.getElementById("year"),
-  userEmail:     document.getElementById("userEmail"),
-  emailErr:      document.getElementById("emailErr"),
-  emailReveal:   document.getElementById("emailReveal"),
-  createSticr:   document.getElementById("createSticr"),
-  createQualReg: document.getElementById("createQualReg"),
-  run:           document.getElementById("run"),
-  status:        document.getElementById("status"),
-  statusText:    document.getElementById("statusText"),
-  spin:          document.getElementById("spin"),
-  download:      document.getElementById("download"),
-  downloadCsv:   document.getElementById("download-csv"),
+  userEmail:   document.getElementById("userEmail"),
+  emailErr:    document.getElementById("emailErr"),
+  emailReveal: document.getElementById("emailReveal"),
+  createSticr: document.getElementById("createSticr"),
+  run:         document.getElementById("run"),
+  status:      document.getElementById("status"),
+  statusText:  document.getElementById("statusText"),
+  spin:        document.getElementById("spin"),
+  download:    document.getElementById("download"),
   log:         document.getElementById("log"),
   verBanner:   document.getElementById("ver-banner"),
   verBody:     document.getElementById("ver-body"),
@@ -79,16 +77,18 @@ function isPhilipsEmail(v) {
 }
 
 function refreshRunState() {
+  const doSticr = els.createSticr.checked;
+
+  // Email reveal is independent of pyReady — show/hide immediately on toggle
+  els.emailReveal.style.display = doSticr ? "" : "none";
+
   if (!pyReady) return;
   const yearOk  = /^\d{4}$/.test(els.year.value.trim());
-  const doSticr = els.createSticr.checked;
   const emailOk = !doSticr || isPhilipsEmail(els.userEmail.value);
   const ok = els.prevFile.files.length && updBytes && selectedMonth && yearOk
           && emailOk && !verBlocking;
   els.run.disabled = !ok;
   if (ok) els.run.textContent = "Generate document";
-
-  els.emailReveal.style.display = doSticr ? "" : "none";
 }
 
 // ── Month grid ────────────────────────────────────────────────────────────────
@@ -115,9 +115,8 @@ els.userEmail.addEventListener("input", () => {
   refreshRunState();
 });
 
-// ── STICR / qual registry toggles ────────────────────────────────────────────
+// ── STICR toggle ──────────────────────────────────────────────────────────────
 els.createSticr.addEventListener("change", refreshRunState);
-els.createQualReg.addEventListener("change", refreshRunState);
 
 // ── Upload zones ──────────────────────────────────────────────────────────────
 
@@ -303,16 +302,14 @@ async function boot() {
 async function generate() {
   els.run.disabled = true;
   els.download.style.display = "none";
-  els.downloadCsv.style.display = "none";
   els.log.textContent = "";
 
-  const month       = selectedMonth;
-  const year        = els.year.value.trim();
-  const updExt      = updFileName.toLowerCase().endsWith(".docx") ? "docx" : "txt";
-  const userEmail   = els.userEmail.value.trim();
-  const pat         = INJECTED_PAT;
-  const doSticr     = els.createSticr.checked;
-  const doQualReg   = els.createQualReg.checked;
+  const month     = selectedMonth;
+  const year      = els.year.value.trim();
+  const updExt    = updFileName.toLowerCase().endsWith(".docx") ? "docx" : "txt";
+  const userEmail = els.userEmail.value.trim();
+  const pat       = INJECTED_PAT;
+  const doSticr   = els.createSticr.checked;
 
   try {
     setStatus("Reading uploaded files...", "", true);
@@ -351,23 +348,6 @@ for k, v in json.loads(${JSON.stringify(JSON.stringify(env))}).items():
     els.download.download    = outName;
     els.download.textContent = "Download " + outName;
     els.download.style.display = "block";
-
-    if (doQualReg) {
-      try {
-        const csvText = pyodide.globals.get("qual_registry_csv_output");
-        if (csvText) {
-          const csvBlob = new Blob([csvText], { type: "text/csv" });
-          const csvUrl  = URL.createObjectURL(csvBlob);
-          const csvName = `Qualification_Registry_${month}_${year}.csv`;
-          els.downloadCsv.href        = csvUrl;
-          els.downloadCsv.download    = csvName;
-          els.downloadCsv.textContent = "Download " + csvName;
-          els.downloadCsv.style.display = "block";
-        }
-      } catch (e) {
-        log("CSV generation error: " + e);
-      }
-    }
 
     if (doSticr) {
       await createSticrs(pat, userEmail);

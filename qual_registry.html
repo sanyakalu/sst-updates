@@ -1,0 +1,660 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Qualification Registry Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --pink:       #f472b6;
+      --pink-dark:  #db2777;
+      --pink-light: #fce7f3;
+      --pink-mid:   #fbcfe8;
+      --accent:     #e879f9;
+      --text:       #4a1942;
+      --text-soft:  #9d6e96;
+      --border:     #f9a8d4;
+      --bg:         #fff0f7;
+      --card:       #ffffff;
+      --ok:         #059669;
+      --err:        #e11d48;
+      --warn:       #b45309;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Nunito", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 40px 16px;
+      min-height: 100vh;
+    }
+
+    .wrap { max-width: 680px; margin: 0 auto; }
+
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--pink-dark);
+      margin-bottom: 6px;
+      letter-spacing: -0.01em;
+    }
+
+    .sub {
+      color: var(--text-soft);
+      font-size: 0.9rem;
+      margin-bottom: 28px;
+      line-height: 1.55;
+      font-weight: 500;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1.5px solid var(--pink-mid);
+      border-radius: 20px;
+      padding: 32px;
+      box-shadow: 0 6px 32px rgba(244, 114, 182, 0.13);
+    }
+
+    /* ── Fields ── */
+    .field { margin-bottom: 22px; }
+
+    label.lbl {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--text-soft);
+      margin-bottom: 8px;
+    }
+    .req { color: var(--pink-dark); }
+
+    /* Upload zones */
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 18px 16px;
+      cursor: pointer;
+      position: relative;
+      background: #fff;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: var(--pink);
+      background: var(--pink-light);
+    }
+    .upload-zone input[type="file"] {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      opacity: 0; cursor: pointer;
+    }
+    .upload-inner {
+      display: flex; align-items: center; gap: 10px;
+      pointer-events: none;
+    }
+    .upload-icon { color: var(--pink); flex-shrink: 0; }
+    .upload-text { font-size: 0.88rem; font-weight: 500; color: var(--text); }
+    .upload-text strong { color: var(--pink-dark); font-weight: 700; }
+    .upload-text small { display: block; color: var(--text-soft); font-size: 0.76rem; margin-top: 2px; }
+    .upload-chosen {
+      margin-top: 8px; font-size: 0.8rem; font-weight: 700;
+      color: var(--ok); display: none; pointer-events: none;
+    }
+
+    /* Month + year row */
+    .two-col { display: flex; gap: 16px; }
+    .two-col .field { flex: 1; }
+
+    /* Month picker */
+    .month-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 6px;
+    }
+    .month-btn {
+      border: 1.5px solid var(--border);
+      background: #fff;
+      border-radius: 9px;
+      padding: 8px 0;
+      font-family: "Nunito", sans-serif;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      transition: background 0.12s, border-color 0.12s, color 0.12s, transform 0.1s;
+    }
+    .month-btn:hover { background: var(--pink-light); border-color: var(--pink); transform: translateY(-1px); }
+    .month-btn.selected {
+      background: linear-gradient(135deg, var(--pink) 0%, var(--accent) 100%);
+      border-color: transparent;
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(244, 114, 182, 0.38);
+    }
+
+    /* Year input */
+    input[type="text"], input[type="number"] {
+      width: 100%;
+      padding: 10px 13px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      font-family: "Nunito", sans-serif;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    input:focus {
+      border-color: var(--pink);
+      box-shadow: 0 0 0 3px rgba(244, 114, 182, 0.16);
+    }
+
+    /* Run button */
+    #run {
+      width: 100%;
+      background: linear-gradient(135deg, var(--pink-dark) 0%, var(--accent) 100%);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      padding: 14px;
+      font-family: "Nunito", sans-serif;
+      font-size: 1rem;
+      font-weight: 800;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.12s, box-shadow 0.15s;
+      box-shadow: 0 4px 16px rgba(219, 39, 119, 0.28);
+      margin-top: 4px;
+    }
+    #run:hover:not(:disabled) { opacity: 0.91; transform: translateY(-2px); box-shadow: 0 6px 20px rgba(219, 39, 119, 0.36); }
+    #run:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    /* Status bar */
+    .status {
+      margin-top: 18px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: var(--pink-light);
+      border: 1px solid var(--pink-mid);
+      color: var(--text-soft);
+      font-size: 0.85rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .status.ok   { background: #ecfdf5; border-color: #6ee7b7; color: var(--ok); }
+    .status.err  { background: #fff1f2; border-color: #fda4af; color: var(--err); white-space: pre-wrap; }
+    .status.warn { background: #fffbeb; border-color: #fcd34d; color: var(--warn); }
+
+    .spinner {
+      width: 15px; height: 15px; border-radius: 50%; flex: none;
+      border: 2.5px solid rgba(219,39,119,0.2);
+      border-top-color: var(--pink-dark);
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* CSV download button — teal */
+    #download-csv {
+      display: none;
+      margin-top: 14px;
+      width: 100%;
+      text-align: center;
+      text-decoration: none;
+      background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
+      color: #fff;
+      font-family: "Nunito", sans-serif;
+      font-weight: 800;
+      font-size: 0.95rem;
+      padding: 13px 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 14px rgba(8, 145, 178, 0.25);
+      transition: opacity 0.15s, transform 0.12s;
+    }
+    #download-csv:hover { opacity: 0.9; transform: translateY(-1px); }
+
+    /* Log */
+    details { margin-top: 16px; }
+    summary {
+      cursor: pointer;
+      color: var(--text-soft);
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      user-select: none;
+    }
+    pre#log {
+      background: #1e0a1a;
+      color: #f9c8e8;
+      padding: 14px;
+      border-radius: 10px;
+      font-size: 0.75rem;
+      max-height: 220px;
+      overflow: auto;
+      margin-top: 10px;
+      white-space: pre-wrap;
+      line-height: 1.6;
+    }
+
+    /* Toggle switch */
+    .sticr-toggle-row {
+      display: flex; align-items: center; gap: 14px;
+      margin-bottom: 0;
+    }
+    .toggle-label { font-size: 0.9rem; font-weight: 600; color: var(--text); flex: 1; }
+    .toggle-label small { display: block; color: var(--text-soft); font-size: 0.77rem; font-weight: 500; margin-top: 2px; }
+
+    .switch { position: relative; display: inline-block; width: 46px; height: 26px; flex-shrink: 0; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; cursor: pointer; inset: 0;
+      background: #e5e7eb; border-radius: 26px;
+      transition: background 0.2s;
+    }
+    .slider::before {
+      content: ""; position: absolute;
+      width: 20px; height: 20px; border-radius: 50%;
+      left: 3px; bottom: 3px;
+      background: #fff;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+      transition: transform 0.2s;
+    }
+    .switch input:checked + .slider { background: linear-gradient(135deg, var(--pink-dark) 0%, var(--accent) 100%); }
+    .switch input:checked + .slider::before { transform: translateX(20px); }
+
+    .hint { color: var(--text-soft); font-size: 0.77rem; font-weight: 500; margin-top: 5px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Qualification Registry Generator</h1>
+    <p class="sub">Upload last month's SST document, pick the target month and year, and download the qualification registry CSV.</p>
+
+    <div class="card">
+
+      <!-- Previous SST upload -->
+      <div class="field">
+        <label class="lbl" for="prevFile">Previous SST document <span class="req">*</span></label>
+        <div class="upload-zone" id="zone-prev">
+          <input type="file" id="prevFile" accept=".docx" />
+          <div class="upload-inner">
+            <svg class="upload-icon" width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 12V4m0 0L8 8m4-4l4 4"/>
+            </svg>
+            <div class="upload-text">
+              <strong>Click to upload</strong> or drag and drop
+              <small>Last month's SST — .docx only</small>
+            </div>
+          </div>
+          <div class="upload-chosen" id="chosen-prev"></div>
+        </div>
+      </div>
+
+      <!-- Month + Year -->
+      <div class="two-col">
+        <div class="field">
+          <label class="lbl">Target month <span class="req">*</span></label>
+          <div class="month-grid" id="month-grid">
+            <button class="month-btn" data-month="Jan">Jan</button>
+            <button class="month-btn" data-month="Feb">Feb</button>
+            <button class="month-btn" data-month="Mar">Mar</button>
+            <button class="month-btn" data-month="Apr">Apr</button>
+            <button class="month-btn" data-month="May">May</button>
+            <button class="month-btn" data-month="Jun">Jun</button>
+            <button class="month-btn" data-month="Jul">Jul</button>
+            <button class="month-btn" data-month="Aug">Aug</button>
+            <button class="month-btn" data-month="Sep">Sep</button>
+            <button class="month-btn" data-month="Oct">Oct</button>
+            <button class="month-btn" data-month="Nov">Nov</button>
+            <button class="month-btn" data-month="Dec">Dec</button>
+          </div>
+        </div>
+        <div class="field">
+          <label class="lbl" for="year">Target year <span class="req">*</span></label>
+          <input type="text" id="year" value="2026" inputmode="numeric" maxlength="4" />
+        </div>
+      </div>
+
+      <!-- Generate button -->
+      <button id="run" disabled>Loading Python...</button>
+
+      <!-- Status bar -->
+      <div class="status" id="status">
+        <span class="spinner" id="spin"></span>
+        <span id="statusText">Starting up...</span>
+      </div>
+
+      <!-- Download CSV -->
+      <a id="download-csv">Download CSV</a>
+
+      <!-- Log -->
+      <details>
+        <summary>Show log</summary>
+        <pre id="log"></pre>
+      </details>
+
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+  <script>
+    // ── State ──────────────────────────────────────────────────────────────────
+    let pyReady = false;
+    let prevFile = null;
+    let selectedMonth = null;
+    let csvBlob = null;
+    let csvFilename = "";
+
+    // ── DOM refs ───────────────────────────────────────────────────────────────
+    const runBtn       = document.getElementById("run");
+    const statusEl     = document.getElementById("status");
+    const statusText   = document.getElementById("statusText");
+    const spinEl       = document.getElementById("spin");
+    const downloadCsv  = document.getElementById("download-csv");
+    const logEl        = document.getElementById("log");
+    const yearEl       = document.getElementById("year");
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+    function log(msg) {
+      logEl.textContent += msg + "\n";
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function setStatus(msg, type = "") {
+      statusEl.className = "status" + (type ? " " + type : "");
+      statusText.textContent = msg;
+      spinEl.style.display = (type === "" && !pyReady) ? "" : "none";
+      if (type === "ok" || type === "err" || type === "warn") {
+        spinEl.style.display = "none";
+      }
+    }
+
+    function refreshRunState() {
+      const yearVal = yearEl.value.trim();
+      const yearOk = /^\d{4}$/.test(yearVal);
+      const ready = pyReady && prevFile && selectedMonth && yearOk;
+      runBtn.disabled = !ready;
+      if (pyReady && !ready) {
+        runBtn.textContent = "Generate Qualification Registry";
+      }
+    }
+
+    // ── Upload zone wiring ─────────────────────────────────────────────────────
+    function wireZone(zoneId, inputId, chosenId, onFile) {
+      const zone   = document.getElementById(zoneId);
+      const input  = document.getElementById(inputId);
+      const chosen = document.getElementById(chosenId);
+
+      input.addEventListener("change", () => {
+        const f = input.files[0];
+        if (!f) return;
+        chosen.textContent = "✓ " + f.name;
+        chosen.style.display = "block";
+        onFile(f);
+      });
+
+      zone.addEventListener("dragover", e => { e.preventDefault(); zone.classList.add("drag-over"); });
+      zone.addEventListener("dragleave", () => zone.classList.remove("drag-over"));
+      zone.addEventListener("drop", e => {
+        e.preventDefault();
+        zone.classList.remove("drag-over");
+        const f = e.dataTransfer.files[0];
+        if (!f) return;
+        chosen.textContent = "✓ " + f.name;
+        chosen.style.display = "block";
+        onFile(f);
+      });
+    }
+
+    wireZone("zone-prev", "prevFile", "chosen-prev", f => {
+      prevFile = f;
+      log("Previous SST selected: " + f.name);
+      refreshRunState();
+    });
+
+    // ── Month picker ───────────────────────────────────────────────────────────
+    document.getElementById("month-grid").addEventListener("click", e => {
+      const btn = e.target.closest(".month-btn");
+      if (!btn) return;
+      document.querySelectorAll(".month-btn").forEach(b => b.classList.remove("selected"));
+      btn.classList.add("selected");
+      selectedMonth = btn.dataset.month;
+      log("Month selected: " + selectedMonth);
+      refreshRunState();
+    });
+
+    yearEl.addEventListener("input", refreshRunState);
+
+    // ── Pyodide boot ───────────────────────────────────────────────────────────
+    async function bootPyodide() {
+      log("Loading Pyodide...");
+      setStatus("Loading Python runtime...");
+      try {
+        window.pyodide = await loadPyodide();
+        log("Pyodide loaded. Loading packages...");
+        setStatus("Loading packages (micropip, pandas, lxml)...");
+
+        await pyodide.loadPackage(["micropip", "pandas", "lxml"]);
+        log("Core packages loaded. Installing python-docx...");
+        setStatus("Installing python-docx...");
+
+        await pyodide.runPythonAsync(`
+import micropip
+await micropip.install(["python-docx", "python-dateutil"])
+`);
+        log("python-docx installed.");
+
+        pyodide.FS.mkdir("/work");
+        log("Filesystem ready.");
+
+        pyReady = true;
+        runBtn.textContent = "Generate Qualification Registry";
+        setStatus("Ready — upload a file and fill in the fields.", "ok");
+        refreshRunState();
+      } catch (err) {
+        log("Boot error: " + err);
+        setStatus("Failed to load Python: " + err.message, "err");
+      }
+    }
+
+    bootPyodide();
+
+    // ── Generate ───────────────────────────────────────────────────────────────
+    async function generate() {
+      if (!pyReady || !prevFile || !selectedMonth) return;
+
+      const year = yearEl.value.trim();
+      if (!/^\d{4}$/.test(year)) {
+        setStatus("Please enter a valid 4-digit year.", "err");
+        return;
+      }
+
+      // Reset download
+      downloadCsv.style.display = "none";
+      csvBlob = null;
+
+      runBtn.disabled = true;
+      spinEl.style.display = "";
+      setStatus("Writing files to virtual filesystem...");
+      log("\n--- Generate started ---");
+
+      try {
+        // Write prev SST to virtual FS
+        const prevBuf = await prevFile.arrayBuffer();
+        pyodide.FS.writeFile("/work/previous.docx", new Uint8Array(prevBuf));
+        log("Wrote previous.docx (" + prevBuf.byteLength + " bytes)");
+
+        // Set env vars
+        pyodide.runPython(`import os; os.environ["SST_MONTH"] = "${selectedMonth}"`);
+        pyodide.runPython(`import os; os.environ["SST_YEAR"]  = "${year}"`);
+        pyodide.runPython(`import os; os.environ["PREVIOUS_SST_PATH"] = "/work/previous.docx"`);
+
+        setStatus("Running qualification registry logic...");
+        log("Running Python...");
+
+        await pyodide.runPythonAsync(`
+import os, re, io, json
+from pathlib import Path
+from docx import Document
+from copy import deepcopy
+import pandas as pd
+from docx.table import _Row
+
+month = os.environ["SST_MONTH"]
+year  = os.environ["SST_YEAR"]
+last_sst_path = Path(os.environ["PREVIOUS_SST_PATH"])
+
+month_map = {
+    "Jan":"January","Feb":"February","Mar":"March","Apr":"April",
+    "May":"May","Jun":"June","Jul":"July","Aug":"August",
+    "Sep":"September","Oct":"October","Nov":"November","Dec":"December"
+}
+
+def last_sst_doc_headers(file_path):
+    doc = Document(file_path)
+    return [p.text for p in doc.paragraphs if p.style.name.startswith('Heading')]
+
+all_doc_headers = last_sst_doc_headers(last_sst_path)
+index = all_doc_headers.index("Appendices")
+all_last_sst_products = all_doc_headers[index + 1:]
+
+windows_products_naming_convention = [x for x in all_last_sst_products if 'Windows' in x]
+windows_products = []
+for product in windows_products_naming_convention:
+    product = re.sub(r"\\b(iot)\\b", "", product, flags=re.IGNORECASE)
+    product = re.sub(r"\\b(ltsc)\\b", "LTSB", product, flags=re.IGNORECASE)
+    product = re.sub(r"\\bv(\\d+(?:H\\d)?)\\b", r"(version \\1)", product, flags=re.IGNORECASE)
+    product = re.sub(r"\\s+", " ", product).strip()
+    windows_products.append(product)
+
+def get_release_versions(doc):
+    releases = []
+    for table in doc.tables:
+        release = None
+        windows_products_cell = None
+        found_release = False
+        for cell in table.rows[0].cells:
+            if found_release:
+                release = repr(cell.text)
+                found_release = False
+            if cell.text.strip().lower() == "release:":
+                found_release = True
+            if release is not None:
+                if cell.text.startswith("PIC iX Servers and Client Application:"):
+                    windows_products_cell = cell.text.split("PIC iX Servers and Client Application:")[1].strip()
+        if release is not None and windows_products_cell is not None:
+            releases.append([release, windows_products_cell])
+    return releases
+
+def get_table(doc, title_text):
+    title_text = title_text.strip().lower()
+    for table in doc.tables:
+        if len(table.rows) < 2:
+            continue
+        first_row = [cell.text.strip().lower() for cell in table.rows[0].cells]
+        if len(set(first_row)) == 1 and title_text in first_row:
+            return table
+    raise ValueError(f"Target table not found: {title_text}")
+
+doc = Document(last_sst_path)
+release_versions = get_release_versions(doc)
+cleaned_release_versions = []
+for a, b in release_versions:
+    b = re.sub(r'\\b(?:enterprise|ltsb|ltsc|iot)\\b', '', b, flags=re.IGNORECASE)
+    b = ' '.join(b.split())
+    cleaned_release_versions.append((a, b))
+
+all_sst_updates = []
+for table_name in windows_products:
+    try:
+        table = get_table(doc, table_name)
+    except ValueError:
+        continue
+    post_vuln_row = False
+    for row in table.rows:
+        if post_vuln_row:
+            if row.cells[1].text == "":
+                continue
+            cell0 = row.cells[0].text.strip()
+            if cell0 == "7-Zip":
+                notes = row.cells[4].text
+                m = re.search(r'\\d+(?:\\.\\d+)+', notes)
+                kb_or_build = m.group(0) if m else ""
+            elif cell0 == "Microsoft Edge":
+                notes = row.cells[4].text
+                matches = re.findall(r'\\((.*?)\\)', notes)
+                kb_or_build = matches[0] if matches else ""
+            else:
+                kb_or_build = row.cells[0].text
+            all_sst_updates.append([
+                row.cells[1].text,
+                kb_or_build.replace("*","").replace("Build","").strip(),
+                next((a for a, b in release_versions if b == table_name), None).strip('"').strip("'"),
+                f"PIC iX Servers and Client Application: {table_name}",
+                row.cells[5].text.replace("\\n\\n", ", "),
+                row.cells[3].text.replace("\\n\\n", ", "),
+                row.cells[4].text,
+            ])
+        if 'Vulnerability / Patch ID' in row.cells[0].text:
+            post_vuln_row = True
+
+df_qual = pd.DataFrame(all_sst_updates, columns=[
+    "Qualification Date",
+    "Qualified KB/version or component",
+    "PIC iX release",
+    "Qualified system",
+    "Product",
+    "Recommended Customer Action",
+    "Notes/Instructions",
+])
+_buf = io.StringIO()
+df_qual.to_csv(_buf, index=False)
+qual_registry_csv_output = _buf.getvalue()
+`);
+
+        log("Python finished.");
+
+        // Read result
+        const csvContent = pyodide.globals.get("qual_registry_csv_output");
+        log("CSV rows (approx): " + (csvContent.split("\n").length - 1));
+
+        // Build filename
+        const monthMap = {
+          Jan:"January",Feb:"February",Mar:"March",Apr:"April",
+          May:"May",Jun:"June",Jul:"July",Aug:"August",
+          Sep:"September",Oct:"October",Nov:"November",Dec:"December"
+        };
+        const monthFull = monthMap[selectedMonth] || selectedMonth;
+        csvFilename = `Qualification_Registry_${monthFull}_${year}.csv`;
+
+        // Create blob + download link
+        csvBlob = new Blob([csvContent], { type: "text/csv" });
+        const url = URL.createObjectURL(csvBlob);
+        downloadCsv.href = url;
+        downloadCsv.download = csvFilename;
+        downloadCsv.textContent = "Download " + csvFilename;
+        downloadCsv.style.display = "block";
+
+        setStatus("Done! Qualification registry CSV is ready.", "ok");
+        log("Done.");
+      } catch (err) {
+        log("Error: " + err);
+        setStatus("Error: " + err.message, "err");
+      } finally {
+        runBtn.disabled = false;
+        spinEl.style.display = "none";
+        refreshRunState();
+      }
+    }
+
+    runBtn.addEventListener("click", generate);
+  </script>
+</body>
+</html>
