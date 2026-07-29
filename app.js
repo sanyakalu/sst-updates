@@ -77,12 +77,11 @@ function isPhilipsEmail(v) {
 
 function refreshRunState() {
   if (!pyReady) return;
-  const yearOk   = /^\d{4}$/.test(els.year.value.trim());
-  const doSticr  = els.createSticr.checked;
-  const emailOk  = !doSticr || isPhilipsEmail(els.userEmail.value);
-  const patOk    = !doSticr || (INJECTED_PAT !== "%%SST_ADO_PAT%%" && INJECTED_PAT.trim().length > 0);
+  const yearOk  = /^\d{4}$/.test(els.year.value.trim());
+  const doSticr = els.createSticr.checked;
+  const emailOk = !doSticr || isPhilipsEmail(els.userEmail.value);
   const ok = els.prevFile.files.length && updBytes && selectedMonth && yearOk
-          && emailOk && patOk && !verBlocking;
+          && emailOk && !verBlocking;
   els.run.disabled = !ok;
   if (ok) els.run.textContent = "Generate document";
 
