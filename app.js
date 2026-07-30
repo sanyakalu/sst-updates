@@ -23,6 +23,9 @@ const els = {
   updSection:       document.getElementById("upd-section"),
   monthYearSection: document.getElementById("month-year-section"),
   sticrWarning:     document.getElementById("sticr-warning"),
+  sticrProjectRow:  document.getElementById("sticr-project-row"),
+  btnProjTest:      document.getElementById("btn-proj-test"),
+  btnProjPic:       document.getElementById("btn-proj-pic"),
   run:              document.getElementById("run"),
   status:           document.getElementById("status"),
   statusText:       document.getElementById("statusText"),
@@ -43,6 +46,7 @@ let selectedMonth = null;
 let updBytes      = null;
 let updFileName   = "update.txt";
 let verBlocking   = false;  // true when version check found issues
+let sticrProject  = "Sandbox";  // toggled by Test/PiC buttons
 
 // ── STICR template fields (loaded from repo JSON at boot) ────────────────────
 let templateFields = [];
@@ -92,6 +96,9 @@ function refreshRunState() {
 
   // STICR warning: shown when STICR on but monthly off
   els.sticrWarning.style.display = (doSticr && !doMonthly) ? "block" : "none";
+
+  // Project selector: shown whenever STICR is on
+  els.sticrProjectRow.style.display = doSticr ? "flex" : "none";
 
   // Email reveal: shown when both STICR and monthly are on (independent of pyReady)
   els.emailReveal.style.display = (doSticr && doMonthly) ? "block" : "none";
@@ -167,6 +174,18 @@ els.userEmail.addEventListener("input", refreshRunState);
 els.doMonthly.addEventListener("change", refreshRunState);
 els.doSticr.addEventListener("change",   refreshRunState);
 els.doQualReg.addEventListener("change", refreshRunState);
+
+// ── STICR project selector ────────────────────────────────────────────────────
+els.btnProjTest.addEventListener("click", () => {
+  sticrProject = "Sandbox";
+  els.btnProjTest.classList.add("active");
+  els.btnProjPic.classList.remove("active");
+});
+els.btnProjPic.addEventListener("click", () => {
+  sticrProject = "Philips.PIC";
+  els.btnProjPic.classList.add("active");
+  els.btnProjTest.classList.remove("active");
+});
 
 // ── Upload zones ──────────────────────────────────────────────────────────────
 
@@ -478,7 +497,7 @@ for k, v in json.loads(${JSON.stringify(JSON.stringify(qualEnv))}).items():
 
 async function createSticrs(pat, userEmail) {
   const organization = "PhilipsMA";
-  const project      = "Sandbox";
+  const project      = sticrProject;
 
   let sticrData;
   try {

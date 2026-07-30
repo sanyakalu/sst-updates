@@ -357,6 +357,76 @@
       padding: 6px 10px;
     }
 
+    /* STICR project selector */
+    .sticr-project-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .sticr-proj-btn {
+      flex: 1;
+      padding: 8px 0;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      font-family: "Nunito", sans-serif;
+      font-size: 0.84rem;
+      font-weight: 700;
+      color: var(--text);
+      cursor: pointer;
+      transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s;
+    }
+    .sticr-proj-btn:hover { background: var(--pink-light); border-color: var(--pink); }
+    .sticr-proj-btn.active {
+      background: linear-gradient(135deg, var(--pink-dark) 0%, var(--accent) 100%);
+      border-color: transparent;
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(244, 114, 182, 0.38);
+    }
+
+    /* Help tooltip for upload label */
+    .help-anchor {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      vertical-align: middle;
+      margin-left: 6px;
+      cursor: default;
+    }
+    .help-icon {
+      width: 15px; height: 15px;
+      border-radius: 50%;
+      background: var(--pink-mid);
+      color: var(--pink-dark);
+      font-size: 0.72rem;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      user-select: none;
+      transition: background 0.15s;
+    }
+    .help-anchor:hover .help-icon { background: var(--pink); color: #fff; }
+    .help-tooltip {
+      display: none;
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: calc(100% + 8px);
+      z-index: 100;
+      background: #fff;
+      border: 1.5px solid var(--pink-mid);
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(244,114,182,0.22);
+      padding: 8px;
+      width: 780px;
+      max-width: 92vw;
+      pointer-events: none;
+    }
+    .help-tooltip img { width: 100%; border-radius: 8px; display: block; }
+    .help-anchor:hover .help-tooltip { display: block; }
+
   </style>
 </head>
 <body>
@@ -411,6 +481,10 @@
           </label>
         </div>
         <div id="sticr-warning" style="display:none;">&#x24D8; Enable &#x2018;Fill out monthly SST updates&#x2019; to also create STICRs.</div>
+        <div class="sticr-project-row" id="sticr-project-row" style="display:none;">
+          <button class="sticr-proj-btn active" id="btn-proj-test">Test STICRs</button>
+          <button class="sticr-proj-btn" id="btn-proj-pic">PiC STICRs</button>
+        </div>
       </div>
 
       <div class="field" style="margin-bottom:22px;">
@@ -429,7 +503,7 @@
       <!-- Conditional: update file upload (shown when doMonthly) -->
       <div id="upd-section" style="display:none;">
         <div class="field">
-          <label class="lbl">Monthly update file <span class="req">*</span></label>
+          <label class="lbl">Monthly update file <span class="req">*</span><span class="help-anchor"><span class="help-icon">?</span><span class="help-tooltip"><img src="txt_docx_rqpmts.png" alt=".txt/.docx requirements" /></span></span></label>
           <div class="upload-zone" id="zone-upd">
             <input type="file" id="updFile" accept=".txt,.docx" />
             <div class="upload-inner">
