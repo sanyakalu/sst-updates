@@ -118,15 +118,4 @@ To classification team: Please open this STICR. This is the Monthly Microsoft Se
 {SECURITY_UPDATES}
 
 <div><br></div>
-
-<div>
-{DATE}/{AUTHOR}
-</div>
-
-<div>
-EC Name: {AUTHOR}
-</div>
-
-<div>
-Description: PIC iX - Security Status Table Update for {MONTH} {YEAR}
-</div>`;
+;
