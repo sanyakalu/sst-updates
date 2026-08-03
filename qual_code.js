@@ -61,6 +61,11 @@ for a, b in release_versions:
     b = ' '.join(b.split())
     cleaned_release_versions.append((a, b))
 
+def clean(text):
+    text = text.replace("\\u200b", "").replace("\\u00a0", " ")
+    text = text.replace("\\n\\n", ", ").replace("\\n", " ")
+    return " ".join(text.split())
+
 all_sst_updates = []
 for table_name in windows_products:
     try:
@@ -82,13 +87,13 @@ for table_name in windows_products:
             else:
                 kb_or_build = row.cells[0].text
             all_sst_updates.append([
-                row.cells[1].text,
-                kb_or_build.replace("*","").replace("Build","").strip(),
+                clean(row.cells[1].text),
+                clean(kb_or_build).replace("*","").replace("Build","").replace("build", "").strip(),
                 next((a for a, b in release_versions if b == table_name), None).strip('"').strip("'"),
                 f"PIC iX Servers and Client Application: {table_name}",
-                row.cells[5].text.replace("\\n\\n", ", ").strip(),
-                row.cells[3].text.replace("\\n\\n", ", ").strip(),
-                row.cells[4].text.strip(),
+                clean(row.cells[5].text),
+                clean(row.cells[3].text),
+                clean(row.cells[4].text),
             ])
         if 'Vulnerability / Patch ID' in row.cells[0].text:
             post_vuln_row = True
