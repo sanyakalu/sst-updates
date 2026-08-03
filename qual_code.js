@@ -62,7 +62,12 @@ for a, b in release_versions:
     cleaned_release_versions.append((a, b))
 
 def clean(text):
-    text = text.replace("\\u200b", "").replace("\\u00a0", " ")
+    text = text.replace("\\u200b", "")
+    text = text.replace("\\u00a0", " ")
+    text = text.replace("\\u2013", "-")
+    text = text.replace("\\u2014", "-")
+    text = text.replace("\\u2018", "'").replace("\\u2019", "'")
+    text = text.replace("\\u201c", '"').replace("\\u201d", '"')
     text = text.replace("\\n\\n", ", ").replace("\\n", " ")
     return " ".join(text.split())
 
