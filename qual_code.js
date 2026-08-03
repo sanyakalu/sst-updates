@@ -77,7 +77,7 @@ for table_name in windows_products:
                 m = re.search(r'\\d+(?:\\.\\d+)+', row.cells[4].text)
                 kb_or_build = m.group(0) if m else ""
             elif cell0 == "Microsoft Edge":
-                matches = re.findall(r'\\((.*?)\\)', row.cells[4].text)
+                matches = re.findall(r'\\((.*?)\\)', row.cells[3].text)
                 kb_or_build = matches[0] if matches else ""
             else:
                 kb_or_build = row.cells[0].text
@@ -86,9 +86,9 @@ for table_name in windows_products:
                 kb_or_build.replace("*","").replace("Build","").strip(),
                 next((a for a, b in release_versions if b == table_name), None).strip('"').strip("'"),
                 f"PIC iX Servers and Client Application: {table_name}",
-                row.cells[5].text.replace("\\n\\n", ", "),
-                row.cells[3].text.replace("\\n\\n", ", "),
-                row.cells[4].text,
+                row.cells[5].text.replace("\\n\\n", ", ").strip(),
+                row.cells[3].text.replace("\\n\\n", ", ").strip(),
+                row.cells[4].text.strip(),
             ])
         if 'Vulnerability / Patch ID' in row.cells[0].text:
             post_vuln_row = True
