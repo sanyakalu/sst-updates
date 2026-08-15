@@ -41,6 +41,9 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
       - name: Export deployment log to Snowflake
         if: always()   # run even on failure so you capture failed deploys
         env:
