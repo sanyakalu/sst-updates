@@ -1,0 +1,32 @@
+name: Export Deployment Log to Snowflake
+
+on:
+  workflow_run:
+    workflows: ["Build and Deploy"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  export-log:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Export deployment log to Snowflake
+        env:
+          SNOWFLAKE_PAT: ${{ secrets.SNOWFLAKE_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python export_log_to_snowflake.py \
+            --run-id ${{ github.event.workflow_run.id }} \
+            --workflow "${{ github.event.workflow_run.name }}" \
+            --branch "${{ github.event.workflow_run.head_branch }}" \
+            --actor "${{ github.event.workflow_run.triggering_actor.login }}" \
+            --status "${{ github.event.workflow_run.conclusion }}"

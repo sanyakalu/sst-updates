@@ -28,12 +28,11 @@ log_text = ""
 if logs_response.status_code == 200:
     with zipfile.ZipFile(io.BytesIO(logs_response.content)) as zf:
         parts = []
-        print(f"Files in zip: {zf.namelist()}")
         for name in sorted(zf.namelist()):
             if name.endswith(".txt"):
                 parts.append(f"=== {name} ===\n" + zf.read(name).decode("utf-8", errors="replace"))
         log_text = "\n\n".join(parts)
-        print(f"log_text length: {len(log_text)}")
+        print(f"Fetched log text ({len(log_text)} chars)")
 
 conn = snowflake.connector.connect(
     account="ywa73928.east-us-2.azure",
