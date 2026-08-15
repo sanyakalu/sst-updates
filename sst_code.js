@@ -1024,4 +1024,3 @@ for title, title_group in df.groupby("STICR title", sort=False):
 
 sticr_json_output = _json.dumps(sticrs)
 `;
-

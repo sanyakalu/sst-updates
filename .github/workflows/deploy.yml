@@ -40,3 +40,16 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Export deployment log to Snowflake
+        if: always()   # run even on failure so you capture failed deploys
+        env:
+          SNOWFLAKE_PAT: ${{ secrets.SNOWFLAKE_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python scripts/export_log_to_snowflake.py \
+            --run-id ${{ github.run_id }} \
+            --workflow "${{ github.workflow }}" \
+            --branch "${{ github.ref_name }}" \
+            --actor "${{ github.actor }}" \
+            --status "${{ job.status }}"
