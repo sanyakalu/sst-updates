@@ -47,7 +47,7 @@ jobs:
           SNOWFLAKE_PAT: ${{ secrets.SNOWFLAKE_PAT }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          python scripts/export_log_to_snowflake.py \
+          python export_log_to_snowflake.py \
             --run-id ${{ github.run_id }} \
             --workflow "${{ github.workflow }}" \
             --branch "${{ github.ref_name }}" \
