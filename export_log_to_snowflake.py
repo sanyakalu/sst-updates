@@ -29,8 +29,7 @@ conn = snowflake.connector.connect(
 
 conn.cursor().execute("""
     INSERT INTO DEPLOYMENT_LOGS
-        (RUN_ID, WORKFLOW, BRANCH, TRIGGERED_BY, STATUS,
-        STARTED_AT, COMPLETED_AT, LOG_URL, RAW_LOG)
+        (RUN_ID, WORKFLOW, BRANCH, TRIGGERED_BY, JOB_STATUS,
         STARTED_AT, COMPLETED_AT, LOG_URL, RAW_LOG)
     SELECT
         %(run_id)s, %(workflow)s, %(branch)s, %(actor)s, %(status)s,
