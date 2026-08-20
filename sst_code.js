@@ -942,6 +942,16 @@ for table in doc.tables:
 
 doc.save(output_sst_path)
 
+import win32com.client
+
+word = win32com.client.Dispatch("Word.Application")
+word.Visible = False
+doc_com = word.Documents.Open(str(output_sst_path.resolve()))
+doc_com.TablesOfContents(1).Update()
+doc_com.Save()
+doc_com.Close()
+word.Quit()
+
 # ── STICR data preparation ────────────────────────────────────────────────────
 import json as _json
 
