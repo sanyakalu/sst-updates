@@ -942,15 +942,11 @@ for table in doc.tables:
 
 doc.save(output_sst_path)
 
-import win32com.client
-
-word = win32com.client.Dispatch("Word.Application")
-word.Visible = False
-doc_com = word.Documents.Open(str(output_sst_path.resolve()))
-doc_com.TablesOfContents(1).Update()
-doc_com.Save()
-doc_com.Close()
-word.Quit()
+from lxml import etree as _etree
+_doc_dirty = Document(output_sst_path)
+for _fld in _doc_dirty.element.iter("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}fldChar"):
+    _fld.set("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}dirty", "1")
+_doc_dirty.save(output_sst_path)
 
 # ── STICR data preparation ────────────────────────────────────────────────────
 import json as _json

@@ -2,4 +2,3 @@ python-docx
 python-dateutil
 pandas
 snowflake-connector-python
-pywin32
