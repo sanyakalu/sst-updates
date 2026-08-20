@@ -118,4 +118,4 @@ To classification team: Please open this STICR. This is the Monthly Microsoft Se
 {SECURITY_UPDATES}
 
 <div><br></div>
-;
+`;
