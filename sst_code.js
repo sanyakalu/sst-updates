@@ -944,27 +944,195 @@ doc.save(output_sst_path)
 
 
 # ── Updating Table of Contents ────────────────────────────────────────────────────
-from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
-doc_dirty = Document(output_sst_path)
 
-# Mark all fields (including TOC fields) as needing an update
-for fld in doc_dirty.element.iter(qn("w:fldChar")):
-    fld.set(qn("w:dirty"), "true")
+def _remove_element(element):
+    element.getparent().remove(element)
 
-# Tell desktop Word to update fields when the document opens
-settings = doc_dirty.settings.element
-update_fields = settings.find(qn("w:updateFields"))
 
-if update_fields is None:
-    update_fields = OxmlElement("w:updateFields")
-    settings.append(update_fields)
+def _paragraph_has_toc_field(paragraph):
+    """Return True when this paragraph begins a Word TOC field."""
+    # Normal Word TOCs use an instrText field.
+    field_code = "".join(
+        node.text or ""
+        for node in paragraph._p.iter(qn("w:instrText"))
+    ).upper()
 
-update_fields.set(qn("w:val"), "true")
+    if "TOC " in field_code or field_code.strip().startswith("TOC"):
+        return True
 
-doc_dirty.save(output_sst_path)
+    # Also supports simple-field TOCs.
+    for field in paragraph._p.iter(qn("w:fldSimple")):
+        instruction = field.get(qn("w:instr"), "").upper()
+        if "TOC " in instruction or instruction.strip().startswith("TOC"):
+            return True
+
+    return False
+
+
+def _paragraph_has_field_end(paragraph):
+    """Return True if this paragraph contains the end of a Word field."""
+    for field_char in paragraph._p.iter(qn("w:fldChar")):
+        if field_char.get(qn("w:fldCharType")) == "end":
+            return True
+    return False
+
+
+def _remove_existing_word_toc(doc):
+    """
+    Removes the first existing Word-generated TOC field and all of its entries.
+    Leaves the 'Table of Contents' title paragraph in place.
+    """
+    paragraphs = list(doc.paragraphs)
+
+    start_index = next(
+        (
+            i for i, paragraph in enumerate(paragraphs)
+            if _paragraph_has_toc_field(paragraph)
+        ),
+        None,
+    )
+
+    if start_index is None:
+        return None
+
+    end_index = next(
+        (
+            i for i in range(start_index, len(paragraphs))
+            if _paragraph_has_field_end(paragraphs[i])
+        ),
+        start_index,
+    )
+
+    # Save the original first TOC paragraph as the insertion point.
+    insertion_point = paragraphs[start_index]
+
+    # Delete from the final TOC paragraph upward.
+    for paragraph in reversed(paragraphs[start_index:end_index + 1]):
+        _remove_element(paragraph._p)
+
+    return insertion_point
+
+
+def _remove_old_static_toc_bookmarks(doc, prefix="StaticTOC_"):
+    """Remove bookmarks that this script created during an earlier run."""
+    bookmark_ids = set()
+
+    for bookmark in doc.element.iter(qn("w:bookmarkStart")):
+        name = bookmark.get(qn("w:name"), "")
+        if name.startswith(prefix):
+            bookmark_ids.add(bookmark.get(qn("w:id")))
+            _remove_element(bookmark)
+
+    for bookmark_end in list(doc.element.iter(qn("w:bookmarkEnd"))):
+        if bookmark_end.get(qn("w:id")) in bookmark_ids:
+            _remove_element(bookmark_end)
+
+
+def _next_bookmark_id(doc):
+    ids = []
+
+    for bookmark in doc.element.iter(qn("w:bookmarkStart")):
+        value = bookmark.get(qn("w:id"))
+        if value and value.isdigit():
+            ids.append(int(value))
+
+    return max(ids, default=0) + 1
+
+
+def _add_bookmark(paragraph, bookmark_name, bookmark_id):
+    """Make the heading a target that a TOC hyperlink can jump to."""
+    start = OxmlElement("w:bookmarkStart")
+    start.set(qn("w:id"), str(bookmark_id))
+    start.set(qn("w:name"), bookmark_name)
+
+    end = OxmlElement("w:bookmarkEnd")
+    end.set(qn("w:id"), str(bookmark_id))
+
+    paragraph._p.insert(0, start)
+    paragraph._p.append(end)
+
+
+def _add_internal_hyperlink(paragraph, text, bookmark_name):
+    """Add a clickable hyperlink pointing to a bookmark in the same document."""
+    hyperlink = OxmlElement("w:hyperlink")
+    hyperlink.set(qn("w:anchor"), bookmark_name)
+    hyperlink.set(qn("w:history"), "1")
+
+    run = OxmlElement("w:r")
+    text_element = OxmlElement("w:t")
+    text_element.text = text
+
+    run.append(text_element)
+    hyperlink.append(run)
+    paragraph._p.append(hyperlink)
+
+
+def replace_toc_with_static_linked_toc(doc, max_heading_level=3):
+    """
+    Replaces the existing Word TOC with a static linked TOC.
+    It has clickable entries but intentionally does not include page numbers.
+    """
+    # Gather headings before inserting any new TOC paragraphs.
+    headings = []
+
+    for paragraph in doc.paragraphs:
+        style_name = paragraph.style.name if paragraph.style else ""
+
+        if style_name.startswith("Heading "):
+            try:
+                level = int(style_name.replace("Heading ", ""))
+            except ValueError:
+                continue
+
+            if 1 <= level <= max_heading_level and paragraph.text.strip():
+                headings.append((level, paragraph))
+
+    # Remove bookmarks created by a prior workflow run.
+    _remove_old_static_toc_bookmarks(doc)
+
+    # Remove the original updateable Word TOC field.
+    insertion_point = _remove_existing_word_toc(doc)
+
+    if insertion_point is None:
+        raise ValueError(
+            "Could not find the existing Word TOC field. "
+            "Make sure the template contains a normal Word Table of Contents."
+        )
+
+    # Add bookmarks to each heading.
+    bookmark_id = _next_bookmark_id(doc)
+    toc_entries = []
+
+    for index, (level, heading) in enumerate(headings, start=1):
+        bookmark_name = f"StaticTOC_{index}"
+
+        _add_bookmark(heading, bookmark_name, bookmark_id)
+        bookmark_id += 1
+
+        toc_entries.append((level, heading.text.strip(), bookmark_name))
+
+    # Insert static TOC paragraphs where the old TOC was.
+    for level, text, bookmark_name in toc_entries:
+        toc_paragraph = insertion_point.insert_paragraph_before()
+
+        # Uses the template's existing TOC 1 / TOC 2 / TOC 3 styling.
+        try:
+            toc_paragraph.style = f"TOC {level}"
+        except KeyError:
+            toc_paragraph.style = "Normal"
+
+        _add_internal_hyperlink(toc_paragraph, text, bookmark_name)
+
+doc = Document(output_sst_path)
+
+# Your existing document edits go here
+
+replace_toc_with_static_linked_toc(doc, max_heading_level=3)
+
+doc.save(output_sst_path)
 
 
 # ── STICR data preparation ────────────────────────────────────────────────────
