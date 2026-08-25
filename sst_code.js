@@ -1171,7 +1171,6 @@ def replace_toc_with_static_linked_toc(doc, max_heading_level=3):
     # Remove Word's original TOC container only after the replacement is ready.
     _remove_element(toc_control)
 
-replace_toc_with_static_linked_toc(doc, max_heading_level=3)
 doc.save(output_sst_path)
 
 # ── STICR data preparation ────────────────────────────────────────────────────
