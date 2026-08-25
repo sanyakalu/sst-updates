@@ -563,18 +563,6 @@ doc = Document(output_sst_path)
 doc = validate_input_and_document(input_txt_path=file_txt,output_sst_path=output_sst_path,month=month,year=year)
 newest_reving = None
 
-
-# Set every document section to landscape
-for section in doc.sections:
-    section.orientation = WD_ORIENT.LANDSCAPE
-
-    # if dimensions still portrait (outlirs) - make sure swaps dimensions to landscape mode
-    if section.page_height > section.page_width:
-        section.page_width, section.page_height = (
-            section.page_height,
-            section.page_width,
-        )
-
 #get next doc revision (ex: Dp -> Dq)
 SKIP_CHARS = {"I", "O", "Q", "S", "X"} #chars according to QMS to skip
 def next_revision(rev):
@@ -944,235 +932,32 @@ doc.save(output_sst_path)
 
 
 # ── Updating Table of Contents ────────────────────────────────────────────────────
+from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from copy import deepcopy
-import re
 
+doc = Document(output_sst_path)
 
-def _remove_element(element):
-    element.getparent().remove(element)
+# Remove page numbering restarts
+for section in doc.sections:
+    sectPr = section._sectPr
 
-def _get_toc_format_templates(toc_control):
-    """
-    Copy the actual paragraph formatting used by the existing Word TOC:
-    indentation, spacing, tab stops, and TOC 1 / TOC 2 / TOC 3 styles.
-    """
-    templates = {}
-    title_template = None
+    for child in sectPr:
+        if child.tag == qn("w:pgNumType"):
+            start_attr = qn("w:start")
 
-    for paragraph_xml in toc_control.iter(qn("w:p")):
-        ppr = paragraph_xml.find(qn("w:pPr"))
+            if start_attr in child.attrib:
+                del child.attrib[start_attr]
 
-        if ppr is None:
-            continue
+# Tell Word to update TOC, page numbers, and fields on open
+settings = doc.settings.element
 
-        pstyle = ppr.find(qn("w:pStyle"))
-        style_id = pstyle.get(qn("w:val"), "") if pstyle is not None else ""
+update_fields = OxmlElement("w:updateFields")
+update_fields.set(qn("w:val"), "true")
 
-        if style_id == "TOCHeading":
-            title_template = deepcopy(ppr)
-            continue
-
-        match = re.fullmatch(r"TOC\s*([1-9])", style_id, re.IGNORECASE)
-
-        if match:
-            level = int(match.group(1))
-            templates.setdefault(level, deepcopy(ppr))
-
-    return templates, title_template
-
-
-def _copy_paragraph_format(destination_paragraph, source_ppr):
-    """Replace a new paragraph's formatting with copied TOC formatting."""
-    destination_ppr = destination_paragraph._p.find(qn("w:pPr"))
-
-    if destination_ppr is not None:
-        destination_paragraph._p.remove(destination_ppr)
-
-    destination_paragraph._p.insert(0, deepcopy(source_ppr))
-
-
-def _remove_old_static_toc_bookmarks(doc, prefix="StaticTOC_"):
-    """Remove bookmarks that this script created during an earlier run."""
-    bookmark_ids = set()
-
-    for bookmark in doc.element.iter(qn("w:bookmarkStart")):
-        name = bookmark.get(qn("w:name"), "")
-        if name.startswith(prefix):
-            bookmark_ids.add(bookmark.get(qn("w:id")))
-            _remove_element(bookmark)
-
-    for bookmark_end in list(doc.element.iter(qn("w:bookmarkEnd"))):
-        if bookmark_end.get(qn("w:id")) in bookmark_ids:
-            _remove_element(bookmark_end)
-
-
-def _next_bookmark_id(doc):
-    ids = []
-
-    for bookmark in doc.element.iter(qn("w:bookmarkStart")):
-        value = bookmark.get(qn("w:id"))
-        if value and value.isdigit():
-            ids.append(int(value))
-
-    return max(ids, default=0) + 1
-
-
-def _add_bookmark(paragraph, bookmark_name, bookmark_id):
-    """Make the heading a target that a TOC hyperlink can jump to."""
-    start = OxmlElement("w:bookmarkStart")
-    start.set(qn("w:id"), str(bookmark_id))
-    start.set(qn("w:name"), bookmark_name)
-
-    end = OxmlElement("w:bookmarkEnd")
-    end.set(qn("w:id"), str(bookmark_id))
-
-    paragraph._p.insert(0, start)
-    paragraph._p.append(end)
-
-
-def _add_internal_hyperlink(paragraph, text, bookmark_name):
-    """Add a clickable hyperlink pointing to a bookmark in the same document."""
-    hyperlink = OxmlElement("w:hyperlink")
-    hyperlink.set(qn("w:anchor"), bookmark_name)
-    hyperlink.set(qn("w:history"), "1")
-
-    run = OxmlElement("w:r")
-    text_element = OxmlElement("w:t")
-    text_element.text = text
-
-    run.append(text_element)
-    hyperlink.append(run)
-    paragraph._p.append(hyperlink)
-
-def _find_word_toc_content_control(doc):
-    """
-    Find the Word content control (<w:sdt>) containing the TOC field.
-    """
-    for instr_text in doc.element.iter(qn("w:instrText")):
-        field_code = (instr_text.text or "").strip().upper()
-
-        if field_code.startswith("TOC"):
-            element = instr_text
-
-            # Walk upward until we find the enclosing content control.
-            while element is not None:
-                if element.tag == qn("w:sdt"):
-                    return element
-                element = element.getparent()
-
-    return None
-
-
-def _get_toc_title(toc_control):
-    """
-    Keep the title already used by your template, such as
-    'Table of Contents' or 'Contents'.
-    """
-    for paragraph in toc_control.iter(qn("w:p")):
-        style = paragraph.find(qn("w:pPr") + "/" + qn("w:pStyle"))
-
-        if style is not None and style.get(qn("w:val")) == "TOCHeading":
-            text = "".join(
-                node.text or ""
-                for node in paragraph.iter(qn("w:t"))
-            ).strip()
-
-            if text:
-                return text
-
-    return "Table of Contents"
-
-
-def _set_style_if_available(paragraph, style_name, fallback="Normal"):
-    try:
-        paragraph.style = style_name
-    except (KeyError, ValueError):
-        paragraph.style = fallback
-
-
-def replace_toc_with_static_linked_toc(doc, max_heading_level=3):
-    """
-    Replaces the existing Word TOC content control with a static,
-    clickable TOC. It deliberately has no page numbers.
-    """
-    toc_control = _find_word_toc_content_control(doc)
-
-    if toc_control is None:
-        raise ValueError(
-            "Could not find a Word TOC content control in this document."
-        )
-
-    # Gather headings before adding new TOC paragraphs.
-    headings = []
-
-    for paragraph in doc.paragraphs:
-        style_name = paragraph.style.name if paragraph.style else ""
-
-        if style_name.startswith("Heading "):
-            try:
-                level = int(style_name.replace("Heading ", ""))
-            except ValueError:
-                continue
-
-            if 1 <= level <= max_heading_level and paragraph.text.strip():
-                headings.append((level, paragraph))
-
-    toc_title = _get_toc_title(toc_control)
-    toc_templates, title_template = _get_toc_format_templates(toc_control)
-
-    # Remove prior-run bookmarks, then add fresh target bookmarks.
-    _remove_old_static_toc_bookmarks(doc)
-
-    bookmark_id = _next_bookmark_id(doc)
-    toc_entries = []
-
-    for index, (level, heading) in enumerate(headings, start=1):
-        bookmark_name = f"StaticTOC_{index}"
-
-        _add_bookmark(heading, bookmark_name, bookmark_id)
-        bookmark_id += 1
-
-        toc_entries.append((level, heading.text.strip(), bookmark_name))
-
-    # Recreate the title using the original TOC title formatting.
-    title_paragraph = doc.add_paragraph(toc_title)
-
-    if title_template is not None:
-        _copy_paragraph_format(title_paragraph, title_template)
-    else:
-        _set_style_if_available(title_paragraph, "TOC Heading")
-
-    toc_control.addprevious(title_paragraph._p)
-
-    # Recreate each entry using its original TOC-level formatting.
-    for level, text, bookmark_name in toc_entries:
-        toc_paragraph = doc.add_paragraph()
-
-        template = toc_templates.get(level) or toc_templates.get(1)
-
-        if template is not None:
-            _copy_paragraph_format(toc_paragraph, template)
-        else:
-            _set_style_if_available(toc_paragraph, f"TOC {level}")
-
-        _add_internal_hyperlink(toc_paragraph, text, bookmark_name)
-        toc_control.addprevious(toc_paragraph._p)
-
-    # Create each linked TOC entry immediately after the title.
-    for level, text, bookmark_name in toc_entries:
-        toc_paragraph = doc.add_paragraph()
-        _set_style_if_available(toc_paragraph, f"TOC {level}")
-
-        _add_internal_hyperlink(toc_paragraph, text, bookmark_name)
-        toc_control.addprevious(toc_paragraph._p)
-
-    # Remove Word's original TOC container only after the replacement is ready.
-    _remove_element(toc_control)
+settings.append(update_fields)
 
 doc.save(output_sst_path)
-
 # ── STICR data preparation ────────────────────────────────────────────────────
 import json as _json
 
