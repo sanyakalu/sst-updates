@@ -946,10 +946,51 @@ doc.save(output_sst_path)
 # ── Updating Table of Contents ────────────────────────────────────────────────────
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
+from copy import deepcopy
+import re
 
 
 def _remove_element(element):
     element.getparent().remove(element)
+
+def _get_toc_format_templates(toc_control):
+    """
+    Copy the actual paragraph formatting used by the existing Word TOC:
+    indentation, spacing, tab stops, and TOC 1 / TOC 2 / TOC 3 styles.
+    """
+    templates = {}
+    title_template = None
+
+    for paragraph_xml in toc_control.iter(qn("w:p")):
+        ppr = paragraph_xml.find(qn("w:pPr"))
+
+        if ppr is None:
+            continue
+
+        pstyle = ppr.find(qn("w:pStyle"))
+        style_id = pstyle.get(qn("w:val"), "") if pstyle is not None else ""
+
+        if style_id == "TOCHeading":
+            title_template = deepcopy(ppr)
+            continue
+
+        match = re.fullmatch(r"TOC\s*([1-9])", style_id, re.IGNORECASE)
+
+        if match:
+            level = int(match.group(1))
+            templates.setdefault(level, deepcopy(ppr))
+
+    return templates, title_template
+
+
+def _copy_paragraph_format(destination_paragraph, source_ppr):
+    """Replace a new paragraph's formatting with copied TOC formatting."""
+    destination_ppr = destination_paragraph._p.find(qn("w:pPr"))
+
+    if destination_ppr is not None:
+        destination_paragraph._p.remove(destination_ppr)
+
+    destination_paragraph._p.insert(0, deepcopy(source_ppr))
 
 
 def _remove_old_static_toc_bookmarks(doc, prefix="StaticTOC_"):
@@ -1079,6 +1120,7 @@ def replace_toc_with_static_linked_toc(doc, max_heading_level=3):
                 headings.append((level, paragraph))
 
     toc_title = _get_toc_title(toc_control)
+    toc_templates, title_template = _get_toc_format_templates(toc_control)
 
     # Remove prior-run bookmarks, then add fresh target bookmarks.
     _remove_old_static_toc_bookmarks(doc)
@@ -1094,10 +1136,29 @@ def replace_toc_with_static_linked_toc(doc, max_heading_level=3):
 
         toc_entries.append((level, heading.text.strip(), bookmark_name))
 
-    # Recreate the TOC title in the original TOC position.
+    # Recreate the title using the original TOC title formatting.
     title_paragraph = doc.add_paragraph(toc_title)
-    _set_style_if_available(title_paragraph, "TOC Heading")
+
+    if title_template is not None:
+        _copy_paragraph_format(title_paragraph, title_template)
+    else:
+        _set_style_if_available(title_paragraph, "TOC Heading")
+
     toc_control.addprevious(title_paragraph._p)
+
+    # Recreate each entry using its original TOC-level formatting.
+    for level, text, bookmark_name in toc_entries:
+        toc_paragraph = doc.add_paragraph()
+
+        template = toc_templates.get(level) or toc_templates.get(1)
+
+        if template is not None:
+            _copy_paragraph_format(toc_paragraph, template)
+        else:
+            _set_style_if_available(toc_paragraph, f"TOC {level}")
+
+        _add_internal_hyperlink(toc_paragraph, text, bookmark_name)
+        toc_control.addprevious(toc_paragraph._p)
 
     # Create each linked TOC entry immediately after the title.
     for level, text, bookmark_name in toc_entries:
