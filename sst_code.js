@@ -929,45 +929,6 @@ for table in doc.tables:
 
 doc.save(output_sst_path)
 
-
-# ── Updating Table of Contents ────────────────────────────────────────────────────
-from docx import Document
-from docx.oxml import OxmlElement
-from docx.oxml.ns import qn
-
-doc = Document(output_sst_path)
-
-# Remove page numbering restarts
-for section in doc.sections:
-    sectPr = section._sectPr
-
-    for child in sectPr:
-        if child.tag == qn("w:pgNumType"):
-            start_attr = qn("w:start")
-
-            if start_attr in child.attrib:
-                del child.attrib[start_attr]
-
-# Tell Word to update TOC, page numbers, and fields on open
-settings = doc.settings.element
-
-existing = settings.find(qn("w:updateFields"))
-
-if existing is None:
-    update_fields = OxmlElement("w:updateFields")
-    update_fields.set(qn("w:val"), "true")
-    settings.append(update_fields)
-
-for i, section in enumerate(doc.sections):
-    print(f"SECTION {i}")
-
-    sectPr = section._sectPr
-
-    for child in sectPr:
-        if child.tag == qn("w:pgNumType"):
-            print("FOUND:", child.attrib)
-
-doc.save(output_sst_path)
 # ── STICR data preparation ────────────────────────────────────────────────────
 import json as _json
 
