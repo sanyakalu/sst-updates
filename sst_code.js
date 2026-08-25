@@ -942,11 +942,30 @@ for table in doc.tables:
 
 doc.save(output_sst_path)
 
-from lxml import etree as _etree
-_doc_dirty = Document(output_sst_path)
-for _fld in _doc_dirty.element.iter("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}fldChar"):
-    _fld.set("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}dirty", "1")
-_doc_dirty.save(output_sst_path)
+
+# ── Updating Table of Contents ────────────────────────────────────────────────────
+from docx import Document
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+
+doc_dirty = Document(output_sst_path)
+
+# Mark all fields (including TOC fields) as needing an update
+for fld in doc_dirty.element.iter(qn("w:fldChar")):
+    fld.set(qn("w:dirty"), "true")
+
+# Tell desktop Word to update fields when the document opens
+settings = doc_dirty.settings.element
+update_fields = settings.find(qn("w:updateFields"))
+
+if update_fields is None:
+    update_fields = OxmlElement("w:updateFields")
+    settings.append(update_fields)
+
+update_fields.set(qn("w:val"), "true")
+
+doc_dirty.save(output_sst_path)
+
 
 # ── STICR data preparation ────────────────────────────────────────────────────
 import json as _json
