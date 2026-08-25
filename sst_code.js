@@ -927,7 +927,6 @@ for table in doc.tables:
             new_row.cells[1].text = str("No")
             new_row.cells[2].text = str(hypervisor_row["Full Update Description"])
 
-
 doc.save(output_sst_path)
 
 
@@ -958,6 +957,15 @@ if existing is None:
     update_fields = OxmlElement("w:updateFields")
     update_fields.set(qn("w:val"), "true")
     settings.append(update_fields)
+
+for i, section in enumerate(doc.sections):
+    print(f"SECTION {i}")
+
+    sectPr = section._sectPr
+
+    for child in sectPr:
+        if child.tag == qn("w:pgNumType"):
+            print(child.xml)
 
 doc.save(output_sst_path)
 # ── STICR data preparation ────────────────────────────────────────────────────
