@@ -952,10 +952,12 @@ for section in doc.sections:
 # Tell Word to update TOC, page numbers, and fields on open
 settings = doc.settings.element
 
-update_fields = OxmlElement("w:updateFields")
-update_fields.set(qn("w:val"), "true")
+existing = settings.find(qn("w:updateFields"))
 
-settings.append(update_fields)
+if existing is None:
+    update_fields = OxmlElement("w:updateFields")
+    update_fields.set(qn("w:val"), "true")
+    settings.append(update_fields)
 
 doc.save(output_sst_path)
 # ── STICR data preparation ────────────────────────────────────────────────────
