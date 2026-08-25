@@ -965,7 +965,7 @@ for i, section in enumerate(doc.sections):
 
     for child in sectPr:
         if child.tag == qn("w:pgNumType"):
-            print(child.xml)
+            print("FOUND:", child.attrib)
 
 doc.save(output_sst_path)
 # ── STICR data preparation ────────────────────────────────────────────────────
