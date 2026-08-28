@@ -533,7 +533,7 @@ def create_sticr_table(doc, sticr_df):
         for cell in col.cells:
             cell.width = Inches(width)
 
-_sticr_heading = doc.add_heading("Security Updates Applied", level=4)
+_sticr_heading = doc.add_heading("Description of Product(s) Under Test", level=3)
 current.addnext(_sticr_heading._element)
 current = _sticr_heading._element
 
