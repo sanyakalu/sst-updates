@@ -224,6 +224,23 @@
       box-shadow: 0 4px 14px rgba(8, 145, 178, 0.28);
     }
     #download-csv:hover { opacity: 0.9; transform: translateY(-1px); }
+    #download-dvr {
+      display: none;
+      margin-top: 14px;
+      width: 100%;
+      text-align: center;
+      text-decoration: none;
+      color: #fff;
+      font-family: "Nunito", sans-serif;
+      font-weight: 800;
+      font-size: 0.95rem;
+      padding: 13px 20px;
+      border-radius: 12px;
+      transition: opacity 0.15s, transform 0.12s;
+      background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+      box-shadow: 0 4px 14px rgba(124, 58, 237, 0.28);
+    }
+    #download-dvr:hover { opacity: 0.9; transform: translateY(-1px); }
 
     /* Log */
     details { margin-top: 16px; }
@@ -444,7 +461,7 @@
     <div class="card">
 
       <!-- Previous SST — always shown -->
-      <div class="field">
+      <div class="field" id="field-prev">
         <label class="lbl" for="prevFile">Previous SST document <span class="req">*</span></label>
         <div class="upload-zone" id="zone-prev">
           <input type="file" id="prevFile" accept=".docx" />
@@ -462,8 +479,22 @@
         </div>
       </div>
 
+      <!-- DVR toggle — when on, hides all other inputs -->
+      <div class="field" id="field-dvr" style="margin-bottom:10px;">
+        <div class="sticr-toggle-row">
+          <div class="toggle-label">
+            Create DVR?
+            <small>Generates the Design Verification Report from Azure DevOps test data.</small>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="doDvr" />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
       <!-- Three toggles -->
-      <div class="field" style="margin-bottom:10px;">
+      <div class="field" id="field-monthly" style="margin-bottom:10px;">
         <div class="sticr-toggle-row">
           <div class="toggle-label">
             Fill out monthly SST updates?
@@ -476,7 +507,7 @@
         </div>
       </div>
 
-      <div class="field" style="margin-bottom:10px;">
+      <div class="field" id="field-sticr" style="margin-bottom:10px;">
         <div class="sticr-toggle-row">
           <div class="toggle-label">
             Create STICRs?
@@ -494,7 +525,7 @@
         </div>
       </div>
 
-      <div class="field" style="margin-bottom:22px;">
+      <div class="field" id="field-qualreg" style="margin-bottom:22px;">
         <div class="sticr-toggle-row">
           <div class="toggle-label">
             Create historical qualification file?
@@ -580,6 +611,7 @@
 
       <a id="download" style="display:none;">Download generated document</a>
       <a id="download-csv" style="display:none;">Download qualification CSV</a>
+      <a id="download-dvr">Download DVR document</a>
 
       <details>
         <summary>Show log</summary>
@@ -599,6 +631,8 @@
   <script src="sticr_template_fields.js"></script>
   <!-- STICR HTML template -->
   <script src="sticr_template.js"></script>
+  <!-- DVR Python logic -->
+  <script src="dvr_code.js"></script>
   <!-- App logic -->
   <script src="app.js"></script>
 </body>

@@ -4,6 +4,8 @@ const PYODIDE_INDEX = "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/";
 const WORK    = "/work";
 const OUT_DIR = WORK + "/output";
 const INJECTED_PAT = "%%SST_ADO_PAT%%";
+const DVR_TEMPLATE_URL = "https://raw.githubusercontent.com/sanyakalu/sst-updates/main/DVR_TEMPLATE.docx";
+const MONTH_NUM = {Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12};
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 
@@ -36,6 +38,8 @@ const els = {
   verBanner:        document.getElementById("ver-banner"),
   verBody:          document.getElementById("ver-body"),
   verDismiss:       document.getElementById("ver-dismiss"),
+  doDvr:            document.getElementById("doDvr"),
+  downloadDvr:      document.getElementById("download-dvr"),
 };
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -86,9 +90,41 @@ function isPhilipsEmail(v) {
 // ── Refresh run state ─────────────────────────────────────────────────────────
 
 function refreshRunState() {
+  const doDvr    = els.doDvr.checked;
   const doMonthly = els.doMonthly.checked;
   const doSticr   = els.doSticr.checked;
   const doQualReg = els.doQualReg.checked;
+
+  const fieldPrev    = document.getElementById("field-prev");
+  const fieldMonthly = document.getElementById("field-monthly");
+  const fieldSticr   = document.getElementById("field-sticr");
+  const fieldQualreg = document.getElementById("field-qualreg");
+
+  // DVR mode: hide all SST inputs, show only month/year picker
+  if (doDvr) {
+    fieldPrev.style.display    = "none";
+    fieldMonthly.style.display = "none";
+    fieldSticr.style.display   = "none";
+    fieldQualreg.style.display = "none";
+    els.updSection.style.display       = "none";
+    els.monthYearSection.style.display = "block";
+    els.sticrWarning.style.display     = "none";
+    els.sticrProjectRow.style.display  = "none";
+    els.emailReveal.style.display      = "none";
+    els.emailErr.style.display         = "none";
+    els.verBanner.style.display        = "none";
+    els.run.textContent = "Generate DVR";
+    if (!pyReady) { els.run.disabled = true; return; }
+    const yearOk = /^\d{4}$/.test(els.year.value.trim());
+    els.run.disabled = !(!!selectedMonth && yearOk);
+    return;
+  }
+
+  // Restore SST field visibility when DVR is off
+  fieldPrev.style.display    = "";
+  fieldMonthly.style.display = "";
+  fieldSticr.style.display   = "";
+  fieldQualreg.style.display = "";
 
   // Show/hide conditional sections (no pyReady gate — layout updates immediately)
   els.updSection.style.display       = doMonthly ? "block" : "none";
@@ -171,6 +207,7 @@ els.year.addEventListener("input", refreshRunState);
 els.userEmail.addEventListener("input", refreshRunState);
 
 // ── Toggle wiring ─────────────────────────────────────────────────────────────
+els.doDvr.addEventListener("change",     refreshRunState);
 els.doMonthly.addEventListener("change", refreshRunState);
 els.doSticr.addEventListener("change",   refreshRunState);
 els.doQualReg.addEventListener("change", refreshRunState);
@@ -366,12 +403,115 @@ async function boot() {
   }
 }
 
+// ── DVR ADO data fetch ────────────────────────────────────────────────────────
+
+async function fetchDvrAdo(pat, month, year) {
+  const organization = "PhilipsMA";
+  const project      = "Philips.PIC";
+  const authHeader = {
+    "Authorization": "Basic " + btoa(":" + pat),
+    "Content-Type": "application/json",
+  };
+  const getHeaders = { "Authorization": "Basic " + btoa(":" + pat) };
+  const monthNum   = MONTH_NUM[month];
+  const lastDay    = new Date(parseInt(year), monthNum, 0).getDate();
+  const monthStart = `${year}-${String(monthNum).padStart(2,'0')}-01`;
+  const monthEnd   = `${year}-${String(monthNum).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+  const areaPath   = "Philips.PIC\\SysEng - ESS";
+  const wiqlUrl    = `https://dev.azure.com/${organization}/${project}/_apis/wit/wiql?api-version=7.1`;
+
+  const keywords = [
+    "Crowdstrike","VMWare","OS Security","SQL Server",
+    "Symantec","TrendMicro","Trellix","VMware","Nutanix","Hyper-V",
+    "Microsoft Security Updates",
+  ];
+  const kwClauses = keywords.map(k => `[System.Title] CONTAINS '${k}'`).join(" OR ");
+
+  // Test plans
+  const planResp = await fetch(wiqlUrl, {
+    method: "POST", headers: authHeader,
+    body: JSON.stringify({ query:
+      `SELECT [System.Id],[System.Title],[System.CreatedDate] FROM WorkItems ` +
+      `WHERE [System.WorkItemType]='Test Plan' ` +
+      `AND [System.AreaPath] UNDER '${areaPath}' ` +
+      `AND [System.CreatedDate]>='${monthStart}' ` +
+      `AND [System.CreatedDate]<='${monthEnd}' ` +
+      `AND (${kwClauses}) ORDER BY [System.CreatedDate] DESC`
+    }),
+  });
+  const planIds = ((await planResp.json()).workItems || []).map(w => w.id);
+  log(`DVR: found ${planIds.length} test plan(s)`);
+
+  const testRows = [];
+  for (const planId of planIds) {
+    const plan = await (await fetch(
+      `https://dev.azure.com/${organization}/${project}/_apis/testplan/plans/${planId}?api-version=7.1`,
+      { headers: getHeaders }
+    )).json();
+    const runs = ((await (await fetch(
+      `https://dev.azure.com/${organization}/${project}/_apis/test/runs?planId=${planId}&api-version=7.1`,
+      { headers: getHeaders }
+    )).json()).value) || [];
+    for (const run of runs) {
+      const results = ((await (await fetch(
+        `https://dev.azure.com/${organization}/${project}/_apis/test/runs/${run.id}/results?api-version=7.1`,
+        { headers: getHeaders }
+      )).json()).value) || [];
+      for (const r of results) {
+        testRows.push([
+          planId, plan.name || "", run.name || "", run.id,
+          run.state || "N/A", r.outcome || "N/A",
+          r.testCaseTitle || "N/A", r.testCase?.id || "N/A",
+        ]);
+      }
+    }
+  }
+  log(`DVR: fetched ${testRows.length} test result(s)`);
+
+  // STICRs
+  const prevMonth  = monthNum > 1 ? monthNum - 1 : 12;
+  const prevYear   = monthNum > 1 ? parseInt(year) : parseInt(year) - 1;
+  const sticrStart = `${prevYear}-${String(prevMonth).padStart(2,'0')}-20`;
+  const sticrEnd   = monthEnd;
+
+  const sticrResp = await fetch(wiqlUrl, {
+    method: "POST", headers: authHeader,
+    body: JSON.stringify({ query:
+      `SELECT [System.Id],[System.Title],[System.CreatedDate] FROM WorkItems ` +
+      `WHERE [System.WorkItemType]='STICR' ` +
+      `AND [System.AreaPath] UNDER '${areaPath}' ` +
+      `AND [System.CreatedDate]>='${sticrStart}' ` +
+      `AND [System.CreatedDate]<='${sticrEnd}' ` +
+      `AND [System.TeamProject]='Philips.PIC' ` +
+      `AND [Philips.Common.Release]='PIIC_iX_ESS_OS Security & 3rd Party Apps' ` +
+      `ORDER BY [System.CreatedDate] DESC`
+    }),
+  });
+  const sticrIds = ((await sticrResp.json()).workItems || []).map(w => w.id);
+  log(`DVR: found ${sticrIds.length} STICR(s)`);
+
+  const sticrItems = [];
+  for (const sid of sticrIds) {
+    const item = await (await fetch(
+      `https://dev.azure.com/${organization}/${project}/_apis/wit/workitems/${sid}?$expand=fields&api-version=7.1`,
+      { headers: getHeaders }
+    )).json();
+    sticrItems.push({
+      id:          sid,
+      description: item.fields?.["System.Description"] || "",
+    });
+  }
+
+  return { testRows, sticrItems };
+}
+
 // ── Generate ──────────────────────────────────────────────────────────────────
 
 async function generate() {
   els.run.disabled = true;
-  els.download.style.display = "none";
+  els.download.style.display    = "none";
   els.downloadCsv.style.display = "none";
+  els.downloadDvr.style.display = "none";
   els.log.textContent = "";
 
   const doMonthly = els.doMonthly.checked;
@@ -385,6 +525,51 @@ async function generate() {
   const pat       = INJECTED_PAT;
 
   try {
+    // ── DVR branch ──────────────────────────────────────────────────────────
+    if (els.doDvr.checked) {
+      const month    = selectedMonth;
+      const year     = els.year.value.trim();
+      const monthNum = MONTH_NUM[month];
+      const pat      = INJECTED_PAT;
+
+      setStatus("Fetching DVR template from repo...", "", true);
+      const tplResp = await fetch(DVR_TEMPLATE_URL);
+      if (!tplResp.ok) throw new Error(`Failed to fetch DVR template: ${tplResp.status}`);
+      const tplBytes = new Uint8Array(await tplResp.arrayBuffer());
+      try { pyodide.FS.mkdir(OUT_DIR); } catch { /* already exists */ }
+      pyodide.FS.writeFile("/work/dvr_template.docx", tplBytes);
+
+      setStatus("Fetching Azure DevOps data...", "", true);
+      const { testRows, sticrItems } = await fetchDvrAdo(pat, month, year);
+
+      pyodide.globals.set("dvr_test_rows_json",    JSON.stringify(testRows));
+      pyodide.globals.set("dvr_sticr_items_json",  JSON.stringify(sticrItems));
+
+      const dvrEnv = { DVR_MONTH_NUM: String(monthNum), DVR_YEAR: year, OUTPUT_DIRECTORY: OUT_DIR };
+      pyodide.runPython(`
+import os, json
+for k, v in json.loads(${JSON.stringify(JSON.stringify(dvrEnv))}).items():
+    os.environ[k] = v
+`);
+
+      setStatus("Generating DVR document...", "", true);
+      await pyodide.runPythonAsync(window.DVR_PYTHON);
+
+      const outName  = pyodide.globals.get("dvr_output_filename");
+      const outBytes = pyodide.FS.readFile(OUT_DIR + "/" + outName);
+      const blob = new Blob([outBytes], {
+        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      });
+      const url = URL.createObjectURL(blob);
+      els.downloadDvr.href        = url;
+      els.downloadDvr.download    = outName;
+      els.downloadDvr.textContent = "Download " + outName;
+      els.downloadDvr.style.display = "block";
+      setStatus("Done. Your DVR is ready.", "ok", false);
+      return;
+    }
+    // ── End DVR branch ──────────────────────────────────────────────────────
+
     setStatus("Reading uploaded files...", "", true);
     const prevBytes = new Uint8Array(await els.prevFile.files[0].arrayBuffer());
 
