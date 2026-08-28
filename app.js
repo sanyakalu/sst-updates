@@ -414,9 +414,10 @@ async function fetchDvrAdo(pat, month, year) {
   };
   const getHeaders = { "Authorization": "Basic " + btoa(":" + pat) };
   const monthNum   = MONTH_NUM[month];
-  const lastDay    = new Date(parseInt(year), monthNum, 0).getDate();
-  const monthStart = `${year}-${String(monthNum).padStart(2,'0')}-01`;
-  const monthEnd   = `${year}-${String(monthNum).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+  const prevMonth  = monthNum > 1 ? monthNum - 1 : 12;
+  const prevYear   = monthNum > 1 ? parseInt(year) : parseInt(year) - 1;
+  const monthStart = `${prevYear}-${String(prevMonth).padStart(2,'0')}-16`;
+  const monthEnd   = `${year}-${String(monthNum).padStart(2,'0')}-15`;
   const areaPath   = "Philips.PIC\\SysEng - ESS";
   const wiqlUrl    = `https://dev.azure.com/${organization}/${project}/_apis/wit/wiql?api-version=7.1`;
 
@@ -469,21 +470,17 @@ async function fetchDvrAdo(pat, month, year) {
   log(`DVR: fetched ${testRows.length} test result(s)`);
 
   // STICRs
-  const prevMonth  = monthNum > 1 ? monthNum - 1 : 12;
-  const prevYear   = monthNum > 1 ? parseInt(year) : parseInt(year) - 1;
-  const sticrStart = `${prevYear}-${String(prevMonth).padStart(2,'0')}-20`;
-  const sticrEnd   = monthEnd;
-
+  const MONTH_NAMES_FULL = {1:"January",2:"February",3:"March",4:"April",5:"May",6:"June",7:"July",8:"August",9:"September",10:"October",11:"November",12:"December"};
   const sticrResp = await fetch(wiqlUrl, {
     method: "POST", headers: authHeader,
     body: JSON.stringify({ query:
-      `SELECT [System.Id],[System.Title],[System.CreatedDate] FROM WorkItems ` +
+      `SELECT [System.Id],[System.Title] FROM WorkItems ` +
       `WHERE [System.WorkItemType]='STICR' ` +
       `AND [System.AreaPath] UNDER '${areaPath}' ` +
-      `AND [System.CreatedDate]>='${sticrStart}' ` +
-      `AND [System.CreatedDate]<='${sticrEnd}' ` +
       `AND [System.TeamProject]='Philips.PIC' ` +
-      `AND [Philips.Common.Release]='PIIC_iX_ESS_OS Security & 3rd Party Apps' ` +
+      `AND [System.Title] CONTAINS 'Microsoft Security Update' ` +
+      `AND [System.Title] CONTAINS '${MONTH_NAMES_FULL[monthNum]}' ` +
+      `AND [System.Title] CONTAINS '${year}' ` +
       `ORDER BY [System.CreatedDate] DESC`
     }),
   });

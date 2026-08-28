@@ -3,12 +3,10 @@ window.DVR_PYTHON = String.raw`
 import calendar
 import re
 import html as html_module
-from datetime import datetime
-import pandas as pd
-import numpy as np
-import json as _json
 from pathlib import Path
 from docx import Document
+import pandas as pd
+import json as _json
 from docx.shared import Pt, Inches
 from docx.oxml import parse_xml
 from docx.oxml.ns import nsdecls
@@ -73,6 +71,9 @@ PRODUCT_PAIRS = [
     ['21H2', '2022', 'Windows 10 21H2, Windows Server 2022',  'Fixture ex83'],
 ]
 
+special_products = ["Crowdstrike", "VMWare", "SQL Server", "Symantec", "TrendMicro", "Trellix", "VMware", "Nutanix", "Hyper-V"]
+special_pattern = '|'.join(re.escape(p) for p in special_products)
+
 # ── Build df from injected test rows ──────────────────────────────────────────
 _cols = ['Plan ID', 'Plan Name', 'Run Name', 'Run ID', 'Run State',
          'Outcome', 'Test Case Name', 'Test Case ID']
@@ -81,11 +82,15 @@ df = pd.DataFrame(_test_rows or [], columns=_cols)
 if not df.empty:
     df['Run Name'] = df['Run Name'].str.replace(r'\(Manual\)', '', regex=True).str.strip()
     df['Version']  = df['Run Name'].str.extract(r'([A-Za-z0-9]*\.[A-Za-z0-9.]+)', expand=False)
-    df['Doc Table'] = np.where(
-        df['Run Name'].str.contains('iX', na=False),
-        'Test Summary-OS Security Updates',
-        'Test Summary-' + df['Run Name'].fillna(''),
-    )
+
+    def get_doc_table(row):
+        if re.search(special_pattern, str(row['Plan Name']), re.IGNORECASE):
+            return 'Test Summary-' + str(row['Plan Name'])
+        if re.search(r'\biX\b', str(row['Run Name']), re.IGNORECASE):
+            return 'Test Summary-OS Security Updates'
+        return 'Test Summary-' + str(row['Run Name'])
+
+    df['Doc Table'] = df.apply(get_doc_table, axis=1)
 else:
     df['Run Name']  = pd.Series(dtype=str)
     df['Version']   = pd.Series(dtype=str)
@@ -111,6 +116,22 @@ doc_df = pd.DataFrame({
     "Run ID":          df.get('Run ID',         pd.Series(dtype=str)),
     "Result":          df.get('Outcome',        pd.Series(dtype=str)),
 })
+
+# ── Split tables where same Test Case ID appears with different Run Names ─────
+OS_SECURITY_TABLE = "Test Summary-OS Security Updates"
+conflicting_tables = set()
+for (table, section, tc_id), grp in doc_df.groupby(["Table", "Section", "Test Case ID"]):
+    if table == OS_SECURITY_TABLE:
+        continue
+    if grp["Run Name"].nunique() > 1:
+        conflicting_tables.add(table)
+
+if conflicting_tables:
+    mask = doc_df["Table"].isin(conflicting_tables)
+    doc_df.loc[mask, "Table"] = "Test Summary-" + doc_df.loc[mask, "Run Name"]
+    print(f"Split {len(conflicting_tables)} table(s) by Run Name")
+else:
+    print("No conflicting tables found.")
 
 # ── Find insert point ─────────────────────────────────────────────────────────
 _target_section = "Design Verification Results"
@@ -294,10 +315,13 @@ _notes_shortening = [
 _product_header_re = re.compile(r'^(\d+\.\d+(?:\.\d+)?)\s*-\s*(.+)$')
 
 def html_to_text(html_str):
-    text = re.sub(r'<br\s*/?>|</p>|</li>|</div>', '\n', html_str, flags=re.IGNORECASE)
+    text = re.sub(r'<li\b[^>]*>', '\n', html_str, flags=re.IGNORECASE)
+    text = re.sub(r'</p>|</li>|</div>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'<br\s*/?>', ' ', text, flags=re.IGNORECASE)
     text = re.sub(r'<[^>]+>', '', text)
     text = html_module.unescape(text)
     text = re.sub(r'[ \t]+', ' ', text)
+    text = re.sub(r'(\S)([a-z]\))', r'\1\n\2', text)
     text = re.sub(r'\n{3,}', '\n\n', text)
     return text.strip()
 
@@ -326,12 +350,34 @@ for _si in _sticr_items_raw:
     _sid  = _si["id"]
     _desc = _si.get("description", "") or ""
     _section_text = extract_updates_section(html_to_text(_desc), filter_year, filter_month)
+
+    raw_lines = [l.strip() for l in _section_text.splitlines()
+                 if l.strip() and re.search(r'[a-zA-Z0-9]', l.strip())]
+
+    def _is_new_entry(line):
+        return bool(
+            re.match(r'^\d{4}-\d{2}', line)
+            or re.match(r'^\*', line)
+            or re.match(r'^\d+\.\d+(?:\.\d+)?\s*-\s*', line)
+            or re.match(r'^Microsoft Edge', line, re.IGNORECASE)
+            or re.match(r'^[a-z]\)\s', line)
+            or re.search(r'\.exe\b', line, re.IGNORECASE)
+        )
+
+    joined_lines = []
+    for _line in raw_lines:
+        prev_is_header = (
+            joined_lines and
+            bool(re.match(r'^\d+\.\d+(?:\.\d+)?\s*-\s*', joined_lines[-1]))
+        )
+        if joined_lines and not _is_new_entry(_line) and not prev_is_header:
+            joined_lines[-1] = joined_lines[-1] + ' ' + _line
+        else:
+            joined_lines.append(_line)
+
     _cur_section = None
     _cur_product = None
-    for _line in _section_text.splitlines():
-        _line = _line.strip()
-        if not _line or not re.search(r'[a-zA-Z0-9]', _line):
-            continue
+    for _line in joined_lines:
         _hm = _product_header_re.match(_line)
         if _hm:
             _cur_section = _hm.group(1)
@@ -458,6 +504,73 @@ if not sticr_df.empty:
         sticr_df.loc[_edge_mask, "KB numbers"]          = _parsed.apply(lambda x: x[0])
         sticr_df.loc[_edge_mask, "Notes / Instructions"] = _parsed.apply(lambda x: x[1])
 
+    # SSU: must install before other updates
+    _ssu_mask = sticr_df["Notes / Instructions"].str.contains("Servicing Stack Update for Windows", na=False)
+    sticr_df.loc[_ssu_mask, "Recommended Customer Action"] = "Install Recommended Update prior to other updates"
+
+    # AVS / Hypervisor normalisation
+    _avs_terms       = ['Crowdstrike', 'Symantec', 'TrendMicro', 'Trellix']
+    _hypervisor_terms = ['VMware', 'Nutanix', 'Hyper-V']
+    _avs_hyp_pattern = "|".join(re.escape(x) for x in _avs_terms + _hypervisor_terms)
+    _avs_hyp_mask = sticr_df["Notes / Instructions"].str.contains(_avs_hyp_pattern, case=False, na=False)
+
+    _avs_product_patterns_list = [
+        (r"crowdstrike\s+(\d+(?:\.\d+)*)",
+         lambda m: f"CrowdStrike Falcon Prevent Next Generation Antivirus, Falcon Sensor for Windows {m.group(1)}"),
+        (r"trendmicro\s+(\d+(?:\.\d+)*)",
+         lambda m: f"Trend Micro Deep Security {m.group(1)}"),
+        (r"mcafee\s+(\d+(?:\.\d+)*)",
+         lambda m: f"McAfee Endpoint Security {m.group(1)}"),
+        (r"trellix\s+(\d+(?:\.\d+)*)",
+         lambda m: f"Trellix Endpoint Security {m.group(1)}"),
+        (r"symantec\s+(\d+(?:\.\d+)*(?:\s+ru\d+)?)",
+         lambda m: f"Symantec Endpoint Protection {m.group(1).upper()}"),
+        (r"nutanix\s+(\d+(?:\.\d+)*)",
+         lambda m: f"Nutanix AOS {m.group(1)} (LTS) with AHV"),
+        (r"vmware\s+(\d+(?:\.\d+)*)",
+         lambda m: f"VMware {m.group(1)}"),
+        (r"hyper-?v\s+(\d+(?:\.\d+)*)",
+         lambda m: f"Hyper-V {m.group(1)}"),
+    ]
+
+    def normalize_avs_product(text):
+        for pattern, formatter in _avs_product_patterns_list:
+            m = re.search(pattern, str(text), flags=re.IGNORECASE)
+            if m:
+                return formatter(m)
+        return text
+
+    if _avs_hyp_mask.any():
+        sticr_df.loc[_avs_hyp_mask, "Notes / Instructions"] = (
+            sticr_df.loc[_avs_hyp_mask, "Notes / Instructions"].apply(normalize_avs_product)
+        )
+        _empty_kb_avs = _avs_hyp_mask & sticr_df["KB numbers"].eq("")
+        sticr_df.loc[_empty_kb_avs, "KB numbers"] = sticr_df.loc[_empty_kb_avs, "Notes / Instructions"]
+
+    # special_versioning: SQL Server year and .NET version
+    _special_versioning = {
+        r'SQL Server\s+(\d{4})': r'Microsoft SQL Server \1',
+        r'^.*?(\.NET\s+\d+\.\d+).*$': r'\1',
+    }
+    for _sv_pattern, _sv_replacement in _special_versioning.items():
+        _sv_mask = sticr_df["Notes / Instructions"].str.contains(_sv_pattern, regex=True, na=False)
+        sticr_df.loc[_sv_mask, "Notes / Instructions"] = (
+            sticr_df.loc[_sv_mask, "Notes / Instructions"]
+            .str.replace(_sv_pattern, _sv_replacement, regex=True)
+        )
+
+    # special_general: canonical names for no-KB rows
+    _special_general = {
+        'Windows Malicious Software Removal Tool': 'Microsoft Windows Malicious Software Removal Tool (MSRT)',
+        'Microsoft Defender Antivirus antimalware platform': 'Microsoft Defender Antivirus (platform update)',
+        '7-Zip': '7-Zip',
+    }
+    for _sg_pattern, _sg_canonical in _special_general.items():
+        _empty_kb = sticr_df["KB numbers"].eq("")
+        _sg_mask = _empty_kb & sticr_df["Notes / Instructions"].str.contains(re.escape(_sg_pattern), regex=True, na=False)
+        sticr_df.loc[_sg_mask, "KB numbers"] = _sg_canonical
+        sticr_df.loc[_sg_mask, "Notes / Instructions"] = _sg_canonical
+
     sticr_df['Recommended Customer Action'] = (
         sticr_df['Recommended Customer Action']
         .replace("", "Install Recommended Update")
@@ -519,11 +632,17 @@ def create_sticr_table(doc, sticr_df):
         _rca   = str(item.get("Recommended Customer Action", ""))
         _has_exe = bool(re.search(r'\.exe', _rca, re.IGNORECASE))
         if has_version_info(_notes):
-            cells[2].text = _notes + ("\n" + numbered_installs(_rca) if _has_exe else "")
+            software_rev = _notes + ("\n" + numbered_installs(_rca) if _has_exe else "")
         elif _has_exe:
-            cells[2].text = numbered_installs(_rca)
+            software_rev = numbered_installs(_rca)
         else:
-            cells[2].text = "N/A"
+            software_rev = "N/A"
+        cells[2].text = ""
+        for _j, _line in enumerate(software_rev.split("\n")):
+            if _j == 0:
+                cells[2].paragraphs[0].add_run(_line)
+            else:
+                cells[2].add_paragraph(_line)
         cells[3].text = get_verification_equipment(str(item["Product Name"]))
         cells[4].text = str(item["STICR ID"])
         for cell in cells:
@@ -533,7 +652,7 @@ def create_sticr_table(doc, sticr_df):
         for cell in col.cells:
             cell.width = Inches(width)
 
-_sticr_heading = doc.add_heading("Security Updates Applied", level=4)
+_sticr_heading = doc.add_heading("Description of Product(s) Under Test", level=3)
 current.addnext(_sticr_heading._element)
 current = _sticr_heading._element
 
