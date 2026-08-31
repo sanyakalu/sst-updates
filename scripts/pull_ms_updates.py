@@ -142,12 +142,25 @@ def pull_catalog_table():
 
 
 def extract_products(titles_list):
+    patterns = [
+        r'Windows Server [A-Za-z0-9]{4}',
+        r'Windows 10 Version [A-Za-z0-9]{4}',
+        r'Microsoft server operating system version [A-Za-z0-9]{4}',
+    ]
     found = []
     for title in titles_list:
-        for pattern in [r'Windows Server [A-Za-z0-9]{4}', r'Windows 10 Version [A-Za-z0-9]{4}', r'version [A-Za-z0-9]{4}']:
+        for pattern in patterns:
             m = re.search(pattern, title, re.IGNORECASE)
             if m:
-                found.append(m.group(0).title())  # normalize case for consistent grouping
+                normalized = m.group(0).title()
+                # Shorten the server OS label to something readable
+                normalized = re.sub(
+                    r'Microsoft Server Operating System Version',
+                    'Windows Server Version',
+                    normalized,
+                    flags=re.IGNORECASE,
+                )
+                found.append(normalized)
     seen_p = set()
     return [x for x in found if not (x in seen_p or seen_p.add(x))]
 
