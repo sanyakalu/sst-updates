@@ -56,7 +56,7 @@ for _sec in doc.sections:
 SECTIONS = {
     "Install Ancillary Software Update": ["install ancillary software"],
     "Performance Test":                  ["longevity", "performance"],
-    "Functional Test":                   ["functional", "microsoft edge", "antivirus", "malware"],
+    "Functional Test":                   ["functional", "microsoft edge", "antivirus", "malware", "virtualization"],
     "Reliability Test":                  ["reliability", "reboot"],
 }
 SECTION_ORDER = [
