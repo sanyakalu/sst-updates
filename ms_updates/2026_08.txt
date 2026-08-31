@@ -1,0 +1,88 @@
+UPDATES BY PRODUCT  (2026-08)
+============================================================
+
+For all clients/servers
+  KBs   : KB5122104, KB5120705, KB5121650, KB5120242, KB4052623, KB890830
+  Titles:
+    - 2026-08 .NET 8.0.30 Security Update for x64 Client (KB5122104)
+    - 2026-08 .NET 8.0.30 Security Update for x64 Server (KB5122104)
+    - 2026-08 Cumulative Update for .NET Framework 3.5 and 4.8 for Microsoft server operating system version 21H2 for x64 (KB5120705)
+    - 2026-08 Cumulative Update for .NET Framework 3.5, 4.8 and 4.8.1 for Microsoft server operating system version 21H2 for x64 (KB5121650)
+    - 2026-08 Cumulative Update for Microsoft server operating system version 21H2 for x64-based Systems (KB5120242)
+    - Update for Microsoft Defender Antivirus antimalware platform - KB4052623 (Version 4.18.26070.9) - Current Channel (Broad)
+    - Windows Malicious Software Removal Tool x64 - v5.144 (KB890830)
+    - Windows Malicious Software Removal Tool - v5.144 (KB890830)
+
+Windows Server 2016
+  KBs   : KB5120236, KB5120418, KB5120702
+  Titles:
+    - 2026-08 Servicing Stack Update for Windows Server 2016 for x64-based Systems (KB5120236)
+    - 2026-08 Cumulative Update for Windows Server 2016 for x64-based Systems (KB5120418)
+    - 2026-08 Cumulative Update for .NET Framework 4.8 for Windows Server 2016 for x64 (KB5120702)
+
+Windows 10 Version 1607
+  KBs   : KB5120236, KB5120702, KB5120418
+  Titles:
+    - 2026-08 Servicing Stack Update for Windows 10 Version 1607 for x64-based Systems (KB5120236)
+    - 2026-08 Cumulative Update for .NET Framework 4.8 for Windows 10 Version 1607 for x64 (KB5120702)
+    - 2026-08 Cumulative Update for .NET Framework 4.8 for Windows 10 Version 1607 (KB5120702)
+    - 2026-08 Cumulative Update for Windows 10 Version 1607 for x64-based Systems (KB5120418)
+
+Windows 10 Version 21H2
+  KBs   : KB5120701, KB5121646, KB5120249
+  Titles:
+    - 2026-08 Cumulative Update for .NET Framework 3.5 and 4.8 for Windows 10 Version 21H2 (KB5120701)
+    - 2026-08 Cumulative Update for .NET Framework 3.5, 4.8 and 4.8.1 for Windows 10 Version 21H2 (KB5121646)
+    - 2026-08 Cumulative Update for .NET Framework 3.5 and 4.8 for Windows 10 Version 21H2 for x64 (KB5120701)
+    - 2026-08 Cumulative Update for .NET Framework 3.5, 4.8 and 4.8.1 for Windows 10 Version 21H2 for x64 (KB5121646)
+    - 2026-08 Cumulative Update for Windows 10 Version 21H2 for x64-based Systems (KB5120249)
+
+Windows Server 2019
+  KBs   : KB5120703, KB5121645, KB5120238
+  Titles:
+    - 2026-08 Cumulative Update for .NET Framework 3.5 and 4.8 for Windows Server 2019 for x64 (KB5120703)
+    - 2026-08 Cumulative Update for .NET Framework 3.5, 4.7.2 and 4.8 for Windows Server 2019 for x64 (KB5121645)
+    - 2026-08 Cumulative Update for Windows Server 2019 for x64-based Systems (KB5120238)
+
+Windows 10 Version 1809
+  KBs   : KB5120703, KB5121645, KB5120238
+  Titles:
+    - 2026-08 Cumulative Update for .NET Framework 3.5 and 4.8 for Windows 10 Version 1809 (KB5120703)
+    - 2026-08 Cumulative Update for .NET Framework 3.5, 4.7.2 and 4.8 for Windows 10 Version 1809 (KB5121645)
+    - 2026-08 Cumulative Update for .NET Framework 3.5 and 4.8 for Windows 10 Version 1809 for x64 (KB5120703)
+    - 2026-08 Cumulative Update for .NET Framework 3.5, 4.7.2 and 4.8 for Windows 10 Version 1809 for x64 (KB5121645)
+    - 2026-08 Cumulative Update for Windows 10 Version 1809 for x64-based Systems (KB5120238)
+
+
+EDGE UPDATES  (2026-08)
+============================================================
+
+Build: 152.0.4191.53   |   Last Updated: 8/27/2026
+  - Microsoft Edge-Stable Channel Version 152 Update for x64 based Editions (Build 152.0.4191.53)
+  - Microsoft Edge-WebView2 Runtime Version 152 Update for x64 based Editions (Build 152.0.4191.53)
+
+Build: 151.0.4129.107   |   Last Updated: 8/24/2026
+  - Microsoft Edge-Stable Channel Version 151 Update for x64 based Editions (Build 151.0.4129.107)
+  - Microsoft Edge-WebView2 Runtime Version 151 Update for x64 based Editions (Build 151.0.4129.107)
+
+Build: 150.0.4078.144   |   Last Updated: 8/21/2026
+  - Microsoft Edge-Extended Stable Channel Version 150 Update for x64 based Editions (Build 150.0.4078.144)
+
+Build: 151.0.4129.101   |   Last Updated: 8/20/2026
+  - Microsoft Edge-Stable Channel Version 151 Update for x64 based Editions (Build 151.0.4129.101)
+  - Microsoft Edge-WebView2 Runtime Version 151 Update for x64 based Editions (Build 151.0.4129.101)
+
+Build: 151.0.4129.86   |   Last Updated: 8/14/2026
+  - Microsoft Edge-Stable Channel Version 151 Update for x64 based Editions (Build 151.0.4129.86)
+  - Microsoft Edge-WebView2 Runtime Version 151 Update for x64 based Editions (Build 151.0.4129.86)
+
+Build: 151.0.4129.78   |   Last Updated: 8/10/2026
+  - Microsoft Edge-Stable Channel Version 151 Update for x64 based Editions (Build 151.0.4129.78)
+  - Microsoft Edge-WebView2 Runtime Version 151 Update for x64 based Editions (Build 151.0.4129.78)
+
+Build: 151.0.4129.72   |   Last Updated: 8/6/2026
+  - Microsoft Edge-Stable Channel Version 151 Update for x64 based Editions (Build 151.0.4129.72)
+  - Microsoft Edge-WebView2 Runtime Version 151 Update for x64 based Editions (Build 151.0.4129.72)
+
+Build: 151.0.4129.93   |   Last Updated: 8/17/2026
+  - Microsoft Edge-WebView2 Runtime Version 151 Update for x64 based Editions (Build 151.0.4129.93)
