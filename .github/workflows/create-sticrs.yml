@@ -1,0 +1,33 @@
+name: Create STICRs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'queue/sticr_queue.json'
+
+permissions:
+  contents: write
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Create STICRs in Azure DevOps
+        env:
+          SST_ADO_PAT: ${{ secrets.SST_ADO_PAT }}
+        run: python scripts/create_sticrs.py
+
+      - name: Remove queue file
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git rm queue/sticr_queue.json
+          git commit -m "chore: clear STICR queue after processing"
+          git push

@@ -3,7 +3,6 @@
 const PYODIDE_INDEX = "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/";
 const WORK    = "/work";
 const OUT_DIR = WORK + "/output";
-const INJECTED_PAT = "%%SST_ADO_PAT%%";
 const DVR_TEMPLATE_URL = "https://raw.githubusercontent.com/sanyakalu/sst-updates/main/DVR_TEMPLATE.docx";
 const MONTH_NUM = {Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12};
 
@@ -403,103 +402,22 @@ async function boot() {
   }
 }
 
-// ── DVR ADO data fetch ────────────────────────────────────────────────────────
+// ── DVR data fetch from pre-committed JSON ────────────────────────────────────
 
-async function fetchDvrAdo(pat, month, year) {
-  const organization = "PhilipsMA";
-  const project      = "Philips.PIC";
-  const authHeader = {
-    "Authorization": "Basic " + btoa(":" + pat),
-    "Content-Type": "application/json",
-  };
-  const getHeaders = { "Authorization": "Basic " + btoa(":" + pat) };
-  const monthNum   = MONTH_NUM[month];
-  const prevMonth  = monthNum > 1 ? monthNum - 1 : 12;
-  const prevYear   = monthNum > 1 ? parseInt(year) : parseInt(year) - 1;
-  const monthStart = `${prevYear}-${String(prevMonth).padStart(2,'0')}-16`;
-  const monthEnd   = `${year}-${String(monthNum).padStart(2,'0')}-15`;
-  const areaPath   = "Philips.PIC\\SysEng - ESS";
-  const wiqlUrl    = `https://dev.azure.com/${organization}/${project}/_apis/wit/wiql?api-version=7.1`;
-
-  const keywords = [
-    "Crowdstrike","VMWare","OS Security","SQL Server",
-    "Symantec","TrendMicro","Trellix","VMware","Nutanix","Hyper-V",
-    "Microsoft Security Updates",
-  ];
-  const kwClauses = keywords.map(k => `[System.Title] CONTAINS '${k}'`).join(" OR ");
-
-  // Test plans
-  const planResp = await fetch(wiqlUrl, {
-    method: "POST", headers: authHeader,
-    body: JSON.stringify({ query:
-      `SELECT [System.Id],[System.Title],[System.CreatedDate] FROM WorkItems ` +
-      `WHERE [System.WorkItemType]='Test Plan' ` +
-      `AND [System.AreaPath] UNDER '${areaPath}' ` +
-      `AND [System.CreatedDate]>='${monthStart}' ` +
-      `AND [System.CreatedDate]<='${monthEnd}' ` +
-      `AND (${kwClauses}) ORDER BY [System.CreatedDate] DESC`
-    }),
-  });
-  const planIds = ((await planResp.json()).workItems || []).map(w => w.id);
-  log(`DVR: found ${planIds.length} test plan(s)`);
-
-  const testRows = [];
-  for (const planId of planIds) {
-    const plan = await (await fetch(
-      `https://dev.azure.com/${organization}/${project}/_apis/testplan/plans/${planId}?api-version=7.1`,
-      { headers: getHeaders }
-    )).json();
-    const runs = ((await (await fetch(
-      `https://dev.azure.com/${organization}/${project}/_apis/test/runs?planId=${planId}&api-version=7.1`,
-      { headers: getHeaders }
-    )).json()).value) || [];
-    for (const run of runs) {
-      const results = ((await (await fetch(
-        `https://dev.azure.com/${organization}/${project}/_apis/test/runs/${run.id}/results?api-version=7.1`,
-        { headers: getHeaders }
-      )).json()).value) || [];
-      for (const r of results) {
-        testRows.push([
-          planId, plan.name || "", run.name || "", run.id,
-          run.state || "N/A", r.outcome || "N/A",
-          r.testCaseTitle || "N/A", r.testCase?.id || "N/A",
-        ]);
-      }
-    }
+async function fetchDvrData(month, year) {
+  const rawBase = "https://raw.githubusercontent.com/sanyakalu/sst-updates/main/dvr_data";
+  const url = `${rawBase}/${month}_${year}.json`;
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    throw new Error(
+      `DVR data for ${month} ${year} not found. ` +
+      `Run the "Fetch DVR Data" workflow first: Actions → Fetch DVR Data → ` +
+      `Run workflow (month: ${month}, year: ${year}).`
+    );
   }
-  log(`DVR: fetched ${testRows.length} test result(s)`);
-
-  // STICRs
-  const MONTH_NAMES_FULL = {1:"January",2:"February",3:"March",4:"April",5:"May",6:"June",7:"July",8:"August",9:"September",10:"October",11:"November",12:"December"};
-  const sticrResp = await fetch(wiqlUrl, {
-    method: "POST", headers: authHeader,
-    body: JSON.stringify({ query:
-      `SELECT [System.Id],[System.Title] FROM WorkItems ` +
-      `WHERE [System.WorkItemType]='STICR' ` +
-      `AND [System.AreaPath] UNDER '${areaPath}' ` +
-      `AND [System.TeamProject]='Philips.PIC' ` +
-      `AND [System.Title] CONTAINS 'Microsoft Security Update' ` +
-      `AND [System.Title] CONTAINS '${MONTH_NAMES_FULL[monthNum]}' ` +
-      `AND [System.Title] CONTAINS '${year}' ` +
-      `ORDER BY [System.CreatedDate] DESC`
-    }),
-  });
-  const sticrIds = ((await sticrResp.json()).workItems || []).map(w => w.id);
-  log(`DVR: found ${sticrIds.length} STICR(s)`);
-
-  const sticrItems = [];
-  for (const sid of sticrIds) {
-    const item = await (await fetch(
-      `https://dev.azure.com/${organization}/${project}/_apis/wit/workitems/${sid}?$expand=fields&api-version=7.1`,
-      { headers: getHeaders }
-    )).json();
-    sticrItems.push({
-      id:          sid,
-      description: item.fields?.["System.Description"] || "",
-    });
-  }
-
-  return { testRows, sticrItems };
+  const data = await resp.json();
+  log(`DVR: loaded ${data.testRows.length} test row(s), ${data.sticrItems.length} STICR(s)`);
+  return data;
 }
 
 // ── Generate ──────────────────────────────────────────────────────────────────
@@ -519,7 +437,6 @@ async function generate() {
   const year      = els.year.value.trim();
   const updExt    = updFileName.toLowerCase().endsWith(".docx") ? "docx" : "txt";
   const userEmail = els.userEmail.value.trim();
-  const pat       = INJECTED_PAT;
 
   try {
     // ── DVR branch ──────────────────────────────────────────────────────────
@@ -527,7 +444,6 @@ async function generate() {
       const month    = selectedMonth;
       const year     = els.year.value.trim();
       const monthNum = MONTH_NUM[month];
-      const pat      = INJECTED_PAT;
 
       setStatus("Fetching DVR template from repo...", "", true);
       const tplResp = await fetch(DVR_TEMPLATE_URL);
@@ -536,8 +452,8 @@ async function generate() {
       try { pyodide.FS.mkdir(OUT_DIR); } catch { /* already exists */ }
       pyodide.FS.writeFile("/work/dvr_template.docx", tplBytes);
 
-      setStatus("Fetching Azure DevOps data...", "", true);
-      const { testRows, sticrItems } = await fetchDvrAdo(pat, month, year);
+      setStatus("Fetching DVR data...", "", true);
+      const { testRows, sticrItems } = await fetchDvrData(month, year);
 
       pyodide.globals.set("dvr_test_rows_json",    JSON.stringify(testRows));
       pyodide.globals.set("dvr_sticr_items_json",  JSON.stringify(sticrItems));
@@ -619,7 +535,7 @@ for k, v in json.loads(${JSON.stringify(JSON.stringify(monthlyEnv))}).items():
 
     // ── STICRs ────────────────────────────────────────────────────────────────
     if (doSticr && doMonthly) {
-      await createSticrs(pat, userEmail);
+      await exportSticrsForWorkflow(userEmail);
     }
 
     // ── Qualification CSV ─────────────────────────────────────────────────────
@@ -675,18 +591,15 @@ for k, v in json.loads(${JSON.stringify(JSON.stringify(qualEnv))}).items():
   }
 }
 
-// ── STICR creation ────────────────────────────────────────────────────────────
+// ── STICR export for server-side creation ─────────────────────────────────────
 
-async function createSticrs(pat, userEmail) {
-  const organization = "PhilipsMA";
-  const project      = sticrProject;
-
+async function exportSticrsForWorkflow(userEmail) {
   let sticrData;
   try {
     const raw = pyodide.globals.get("sticr_json_output");
     sticrData = JSON.parse(raw);
   } catch (e) {
-    setStatus("STICR data not found — document saved but STICRs not created.", "warn", false);
+    setStatus("STICR data not found — document saved but STICRs not exported.", "warn", false);
     log("STICR data error: " + e);
     return;
   }
@@ -696,57 +609,26 @@ async function createSticrs(pat, userEmail) {
     return;
   }
 
-  const createUrl = `https://dev.azure.com/${organization}/${project}/_apis/wit/workitems/$STICR?api-version=7.1`;
-  const headers   = {
-    "Content-Type": "application/json-patch+json",
-    "Authorization": "Basic " + btoa(":" + pat),
+  const payload = {
+    project: sticrProject,
+    sticrs: sticrData.map(item => ({ ...item, userEmail })),
+    templateFields,
   };
 
-  let created = 0;
-  let failed  = 0;
-  const createdItems = [];  // { id, title, url }
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = "sticr_queue.json";
+  a.click();
+  URL.revokeObjectURL(url);
 
-  setStatus(`Creating ${sticrData.length} STICR(s) in Azure DevOps...`, "", true);
-
-  for (const item of sticrData) {
-    const body = [
-      { op: "add", path: "/fields/System.Title",         value: item.title },
-      { op: "add", path: "/fields/System.Description",   value: item.html },
-      { op: "add", path: "/fields/System.AreaPath",       value: project },
-      { op: "add", path: "/fields/System.TeamProject",    value: project },
-      { op: "add", path: "/fields/System.IterationPath",  value: project + "\\Common" },
-      { op: "add", path: "/fields/System.AssignedTo",     value: userEmail },
-      ...templateFields,
-    ];
-
-    try {
-      const resp = await fetch(createUrl, { method: "POST", headers, body: JSON.stringify(body) });
-      if (!resp.ok) {
-        const errText = await resp.text();
-        log(`FAILED (${resp.status}): ${item.title}\n${errText}`);
-        failed++;
-      } else {
-        const wi = await resp.json();
-        const wiUrl = `https://dev.azure.com/${organization}/${project}/_workitems/edit/${wi.id}`;
-        log(`Created STICR ${wi.id}: ${item.title}`);
-        createdItems.push({ id: wi.id, title: item.title, url: wiUrl });
-        created++;
-      }
-    } catch (e) {
-      log(`NETWORK ERROR for "${item.title}": ${e}`);
-      failed++;
-    }
-  }
-
-  if (failed === 0) {
-    setStatus(`Done. Document ready + ${created} STICR(s) created.`, "ok", false);
-  } else {
-    setStatus(`Document ready. ${created} STICR(s) created, ${failed} failed — see log.`, "warn", false);
-  }
-
-  if (createdItems.length > 0) {
-    showSticrPopup(createdItems);
-  }
+  setStatus(
+    `Document ready. ${sticrData.length} STICR(s) exported — commit sticr_queue.json ` +
+    `to queue/ and the "Create STICRs" workflow will run automatically.`,
+    "ok", false
+  );
+  log(`Exported ${sticrData.length} STICR(s) to sticr_queue.json (project: ${sticrProject})`);
 }
 
 function showSticrPopup(items) {

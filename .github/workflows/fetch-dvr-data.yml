@@ -1,0 +1,37 @@
+name: Fetch DVR Data
+
+on:
+  workflow_dispatch:
+    inputs:
+      month:
+        description: 'Month (3-letter, e.g. Jan)'
+        required: true
+      year:
+        description: 'Year (e.g. 2026)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Fetch DVR data from Azure DevOps
+        env:
+          SST_ADO_PAT: ${{ secrets.SST_ADO_PAT }}
+        run: python scripts/fetch_dvr_data.py --month ${{ inputs.month }} --year ${{ inputs.year }}
+
+      - name: Commit DVR data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dvr_data/
+          git diff --cached --quiet || git commit -m "chore: fetch DVR data for ${{ inputs.month }} ${{ inputs.year }}"
+          git push

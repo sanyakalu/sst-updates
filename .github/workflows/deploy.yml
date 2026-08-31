@@ -24,15 +24,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Inject PAT into app.js
-        env:
-          SST_ADO_PAT: ${{ secrets.SST_ADO_PAT }}
-        run: |
-          sed -i "s|%%SST_ADO_PAT%%|${SST_ADO_PAT}|g" app.js
-          
-      - name: Verify injection
-        run: grep -c "%%SST_ADO_PAT%%" app.js && echo "PLACEHOLDER STILL PRESENT" || echo "Injection OK"
-        
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
