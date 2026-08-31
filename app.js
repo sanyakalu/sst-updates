@@ -1,5 +1,6 @@
 /* SST Update Generator — glue between the UI and Pyodide. */
 
+const GH_DISPATCH_TOKEN = "%%GH_DISPATCH_TOKEN%%";
 const PYODIDE_INDEX = "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/";
 const WORK    = "/work";
 const OUT_DIR = WORK + "/output";
@@ -535,7 +536,7 @@ for k, v in json.loads(${JSON.stringify(JSON.stringify(monthlyEnv))}).items():
 
     // ── STICRs ────────────────────────────────────────────────────────────────
     if (doSticr && doMonthly) {
-      await exportSticrsForWorkflow(userEmail);
+      await triggerSticrsWorkflow(userEmail);
     }
 
     // ── Qualification CSV ─────────────────────────────────────────────────────
@@ -591,15 +592,15 @@ for k, v in json.loads(${JSON.stringify(JSON.stringify(qualEnv))}).items():
   }
 }
 
-// ── STICR export for server-side creation ─────────────────────────────────────
+// ── STICR creation via GitHub Actions workflow dispatch ───────────────────────
 
-async function exportSticrsForWorkflow(userEmail) {
+async function triggerSticrsWorkflow(userEmail) {
   let sticrData;
   try {
     const raw = pyodide.globals.get("sticr_json_output");
     sticrData = JSON.parse(raw);
   } catch (e) {
-    setStatus("STICR data not found — document saved but STICRs not exported.", "warn", false);
+    setStatus("STICR data not found — document saved but STICRs not created.", "warn", false);
     log("STICR data error: " + e);
     return;
   }
@@ -609,26 +610,33 @@ async function exportSticrsForWorkflow(userEmail) {
     return;
   }
 
-  const payload = {
-    project: sticrProject,
-    sticrs: sticrData.map(item => ({ ...item, userEmail })),
-    templateFields,
-  };
+  const payload    = { project: sticrProject, sticrs: sticrData.map(i => ({ ...i, userEmail })), templateFields };
+  const bytes      = new TextEncoder().encode(JSON.stringify(payload));
+  const payloadB64 = btoa(String.fromCharCode(...bytes));
 
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement("a");
-  a.href     = url;
-  a.download = "sticr_queue.json";
-  a.click();
-  URL.revokeObjectURL(url);
+  setStatus(`Triggering workflow to create ${sticrData.length} STICR(s)...`, "", true);
 
-  setStatus(
-    `Document ready. ${sticrData.length} STICR(s) exported — commit sticr_queue.json ` +
-    `to queue/ and the "Create STICRs" workflow will run automatically.`,
-    "ok", false
+  const resp = await fetch(
+    "https://api.github.com/repos/sanyakalu/sst-updates/actions/workflows/create-sticrs.yml/dispatches",
+    {
+      method:  "POST",
+      headers: {
+        "Authorization": `Bearer ${GH_DISPATCH_TOKEN}`,
+        "Accept":        "application/vnd.github+json",
+        "Content-Type":  "application/json",
+      },
+      body: JSON.stringify({ ref: "main", inputs: { payload_b64: payloadB64 } }),
+    }
   );
-  log(`Exported ${sticrData.length} STICR(s) to sticr_queue.json (project: ${sticrProject})`);
+
+  if (resp.status === 204) {
+    setStatus(`Document ready. ${sticrData.length} STICR(s) queued — workflow is running.`, "ok", false);
+    log(`STICRs dispatched to GitHub Actions (project: ${sticrProject}). Check: https://github.com/sanyakalu/sst-updates/actions/workflows/create-sticrs.yml`);
+  } else {
+    const err = await resp.text();
+    setStatus(`Failed to trigger workflow (${resp.status}) — see log.`, "err", false);
+    log(`Dispatch error: ${err}`);
+  }
 }
 
 function showSticrPopup(items) {

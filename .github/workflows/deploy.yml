@@ -24,6 +24,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Inject GitHub dispatch token into app.js
+        env:
+          GH_DISPATCH_TOKEN: ${{ secrets.GH_DISPATCH_TOKEN }}
+        run: |
+          sed -i "s|%%GH_DISPATCH_TOKEN%%|${GH_DISPATCH_TOKEN}|g" app.js
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:

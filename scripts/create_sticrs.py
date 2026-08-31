@@ -1,13 +1,13 @@
-import base64, json, os, pathlib, requests
+import base64, json, os, requests
 
-pat  = os.environ["SST_ADO_PAT"]
-auth = base64.b64encode(f":{pat}".encode()).decode()
-hdrs = {
+payload  = json.loads(base64.b64decode(os.environ["PAYLOAD_B64"]).decode("utf-8"))
+pat      = os.environ["SST_ADO_PAT"]
+auth     = base64.b64encode(f":{pat}".encode()).decode()
+hdrs     = {
     "Content-Type":  "application/json-patch+json",
     "Authorization": f"Basic {auth}",
 }
 
-payload         = json.loads(pathlib.Path("queue/sticr_queue.json").read_text())
 sticr_data      = payload["sticrs"]
 template_fields = payload.get("templateFields", [])
 project         = payload.get("project", "Sandbox")

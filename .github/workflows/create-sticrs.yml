@@ -1,14 +1,14 @@
 name: Create STICRs
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'queue/sticr_queue.json'
   workflow_dispatch:
+    inputs:
+      payload_b64:
+        description: 'Base64-encoded STICR payload (triggered automatically by the SST tool)'
+        required: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   create:
@@ -23,12 +23,5 @@ jobs:
       - name: Create STICRs in Azure DevOps
         env:
           SST_ADO_PAT: ${{ secrets.SST_ADO_PAT }}
+          PAYLOAD_B64: ${{ inputs.payload_b64 }}
         run: python scripts/create_sticrs.py
-
-      - name: Remove queue file
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git rm queue/sticr_queue.json
-          git commit -m "chore: clear STICR queue after processing"
-          git push
