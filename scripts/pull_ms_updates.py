@@ -143,7 +143,7 @@ def pull_catalog_table():
 def extract_products(titles_list):
     found = []
     for title in titles_list:
-        for pattern in [r'Windows Server [A-Za-z0-9]{4}', r'Windows 10 Version [A-Za-z0-9]{4}']:
+        for pattern in [r'Windows Server [A-Za-z0-9]{4}', r'Windows 10 Version [A-Za-z0-9]{4}', r'version [A-Za-z0-9]{4}']:
             m = re.search(pattern, title)
             if m:
                 found.append(m.group(0))

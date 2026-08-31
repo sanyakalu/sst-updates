@@ -119,7 +119,20 @@ function refreshRunState() {
     els.emailErr.style.display         = "none";
     els.verBanner.style.display        = "none";
     els.run.textContent = "Pull Microsoft Updates";
-    const yearOk = /^\d{4}$/.test(els.year.value.trim());
+    const yearVal = els.year.value.trim();
+    const yearOk  = /^\d{4}$/.test(yearVal);
+    if (!!selectedMonth && yearOk) {
+      const now       = new Date();
+      const selMonNum = MONTH_NUM[selectedMonth];
+      const selYear   = parseInt(yearVal, 10);
+      const isFuture  = selYear > now.getFullYear() ||
+        (selYear === now.getFullYear() && selMonNum > now.getMonth() + 1);
+      if (isFuture) {
+        setStatus(`${selectedMonth} ${yearVal} hasn't happened yet — select a past or current month.`, "warn", false);
+        els.run.disabled = true;
+        return;
+      }
+    }
     els.run.disabled = !(!!selectedMonth && yearOk);
     return;
   }
@@ -724,6 +737,7 @@ async function generateMsUpdates() {
 
     setStatus("Done. Your Microsoft Updates file is ready.", "ok", false);
     log(`Saved: ${filename}`);
+    showMsUpdatesPopup(text, filename, url);
 
   } catch (e) {
     console.error(e);
@@ -733,6 +747,97 @@ async function generateMsUpdates() {
     els.progressBar.classList.remove("active");
     refreshRunState();
   }
+}
+
+function showMsUpdatesPopup(text, filename, blobUrl) {
+  const existing = document.getElementById("ms-updates-popup-overlay");
+  if (existing) existing.remove();
+
+  const parts          = text.split(/\n{3,}/);
+  const updatesSection = (parts[0] || "").trim();
+  const edgeSection    = (parts[1] || "").trim();
+
+  const label = filename.replace("ms_updates_", "").replace(".txt", "").replace("_", "-");
+
+  const overlay = document.createElement("div");
+  overlay.id = "ms-updates-popup-overlay";
+  overlay.style.cssText = `
+    position:fixed;inset:0;background:rgba(74,25,66,0.45);z-index:1000;
+    display:flex;align-items:center;justify-content:center;padding:20px;
+  `;
+  overlay.innerHTML = `
+    <div style="
+      background:#fff;border-radius:20px;padding:28px 32px;max-width:680px;width:100%;
+      box-shadow:0 12px 48px rgba(219,39,119,0.22);border:1.5px solid var(--pink-mid);
+      max-height:88vh;overflow-y:auto;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+        <strong style="font-size:1.05rem;color:var(--pink-dark);">Microsoft Updates — ${escapeHtml(label)}</strong>
+        <button id="ms-popup-close"
+                style="background:none;border:none;cursor:pointer;font-size:1.1rem;
+                       color:var(--text-soft);padding:2px 6px;font-weight:800;line-height:1;"
+                title="Close">&#x2715;</button>
+      </div>
+
+      <div style="margin-bottom:20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <strong style="font-size:0.9rem;color:var(--pink-dark);">Updates by Product</strong>
+          <button id="ms-copy-updates"
+                  style="padding:5px 13px;border-radius:8px;border:1.5px solid var(--pink-mid);
+                         background:#fff;color:var(--pink-dark);font-size:0.78rem;font-weight:700;cursor:pointer;">
+            Copy
+          </button>
+        </div>
+        <pre style="background:#1e0a1a;color:#f9c8e8;padding:14px;border-radius:10px;
+                    font-size:0.73rem;max-height:220px;overflow:auto;white-space:pre-wrap;
+                    line-height:1.6;margin:0;">${escapeHtml(updatesSection)}</pre>
+      </div>
+
+      <div style="margin-bottom:24px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <strong style="font-size:0.9rem;color:var(--pink-dark);">Edge Updates</strong>
+          <button id="ms-copy-edge"
+                  style="padding:5px 13px;border-radius:8px;border:1.5px solid var(--pink-mid);
+                         background:#fff;color:var(--pink-dark);font-size:0.78rem;font-weight:700;cursor:pointer;">
+            Copy
+          </button>
+        </div>
+        <pre style="background:#1e0a1a;color:#f9c8e8;padding:14px;border-radius:10px;
+                    font-size:0.73rem;max-height:220px;overflow:auto;white-space:pre-wrap;
+                    line-height:1.6;margin:0;">${escapeHtml(edgeSection)}</pre>
+      </div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <a href="${escapeHtml(blobUrl)}" download="${escapeHtml(filename)}"
+           style="padding:9px 20px;border-radius:10px;text-decoration:none;color:#fff;
+                  background:linear-gradient(135deg,#f59e0b,#d97706);
+                  font-size:0.85rem;font-weight:700;">
+          Download .txt
+        </a>
+        <button id="ms-popup-close-btn"
+                style="padding:9px 20px;border-radius:10px;border:1.5px solid var(--pink-mid);
+                       background:#fff;color:var(--pink-dark);font-size:0.85rem;font-weight:700;cursor:pointer;">
+          Close
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  function copyBtn(id, content) {
+    document.getElementById(id).addEventListener("click", function() {
+      navigator.clipboard.writeText(content);
+      this.textContent = "Copied!";
+      this.style.background = "#ecfdf5";
+      this.style.color = "#059669";
+    });
+  }
+  copyBtn("ms-copy-updates", updatesSection);
+  copyBtn("ms-copy-edge",    edgeSection);
+
+  document.getElementById("ms-popup-close").addEventListener("click",     () => overlay.remove());
+  document.getElementById("ms-popup-close-btn").addEventListener("click", () => overlay.remove());
+  overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
 }
 
 // ── STICR creation via GitHub Actions workflow dispatch ───────────────────────
