@@ -237,9 +237,9 @@ edge_df, proposed = build_dataframes(table_results)
 
 content = "\n\n\n".join([format_updates(proposed), format_edge(edge_df)])
 
-os.makedirs("ms_updates", exist_ok=True)
-out_path = f"ms_updates/{year}_{month:02d}.txt"
-with open(out_path, "w", encoding="utf-8") as f:
-    f.write(content)
+# Emit base64-encoded result as a tagged log line for the browser to read
+import base64
+result_b64 = base64.b64encode(content.encode('utf-8')).decode('ascii')
+print(f"##MS_UPDATES_RESULT##{result_b64}")
 
 print(f"Saved to {out_path}")

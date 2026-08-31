@@ -674,6 +674,30 @@ for k, v in json.loads(${JSON.stringify(JSON.stringify(qualEnv))}).items():
 
 // ── MS Updates via GitHub Actions workflow dispatch ───────────────────────────
 
+async function fetchMsUpdatesFromLogs(runId) {
+  try {
+    const jobs = await (await fetch(
+      `https://api.github.com/repos/${REPO}/actions/runs/${runId}/jobs`,
+      { headers: GH_API_HEADERS }
+    )).json();
+    const jobId = jobs.jobs?.[0]?.id;
+    if (!jobId) return null;
+    const logResp = await fetch(
+      `https://api.github.com/repos/${REPO}/actions/jobs/${jobId}/logs`,
+      { headers: GH_API_HEADERS }
+    );
+    if (!logResp.ok) return null;
+    const logText = await logResp.text();
+    const match   = logText.match(/##MS_UPDATES_RESULT##(\S+)/);
+    if (!match) return null;
+    return new TextDecoder().decode(
+      Uint8Array.from(atob(match[1]), c => c.charCodeAt(0))
+    );
+  } catch {
+    return null;
+  }
+}
+
 async function generateMsUpdates() {
   const month       = selectedMonth;
   const year        = els.year.value.trim();
@@ -716,16 +740,11 @@ async function generateMsUpdates() {
       throw new Error(`Workflow ${run.conclusion} — see Actions tab.\n${runUrl}`);
     }
 
-    log("Workflow complete. Fetching results file...");
-    setStatus("Workflow complete — downloading results...", "", true);
+    log("Workflow complete. Reading results from logs...");
+    setStatus("Workflow complete — reading results...", "", true);
 
-    await new Promise(r => setTimeout(r, 4000)); // let GitHub CDN propagate
-
-    const fileUrl = `https://raw.githubusercontent.com/${REPO}/main/ms_updates/${year}_${paddedMonth}.txt?t=${Date.now()}`;
-    const resp = await fetch(fileUrl);
-    if (!resp.ok) throw new Error("Results file not found after workflow completed — check the Actions tab.");
-
-    const text = await resp.text();
+    const text = await fetchMsUpdatesFromLogs(run.id);
+    if (!text) throw new Error("Could not read results from workflow logs — check the Actions tab.");
     const blob = new Blob([text], { type: "text/plain" });
     const url  = URL.createObjectURL(blob);
     const filename = `ms_updates_${year}_${paddedMonth}.txt`;
@@ -753,11 +772,82 @@ function showMsUpdatesPopup(text, filename, blobUrl) {
   const existing = document.getElementById("ms-updates-popup-overlay");
   if (existing) existing.remove();
 
-  const parts          = text.split(/\n{3,}/);
-  const updatesSection = (parts[0] || "").trim();
-  const edgeSection    = (parts[1] || "").trim();
+  const parts      = text.split(/\n{3,}/);
+  const rawUpdates = (parts[0] || "").trim();
+  const rawEdge    = (parts[1] || "").trim();
+  const label      = filename.replace("ms_updates_", "").replace(".txt", "").replace(/_(\d)/, "-$1");
 
-  const label = filename.replace("ms_updates_", "").replace(".txt", "").replace("_", "-");
+  // ── Parsers ────────────────────────────────────────────────────────────────
+  function parseUpdates(raw) {
+    const lines = raw.split('\n').slice(2);
+    const blocks = [];
+    let cur = null;
+    for (const line of lines) {
+      if (!line.trim()) { if (cur) { blocks.push(cur); cur = null; } continue; }
+      if (!line.startsWith(' ') && !line.startsWith('\t')) {
+        if (cur) blocks.push(cur);
+        cur = { product: line.trim(), kbs: [], titles: [] };
+      } else if (cur && /KBs\s*:/.test(line)) {
+        cur.kbs = line.replace(/.*KBs\s*:\s*/, '').split(',').map(s => s.trim()).filter(Boolean);
+      } else if (cur && line.trim().startsWith('- ')) {
+        cur.titles.push(line.trim().slice(2));
+      }
+    }
+    if (cur) blocks.push(cur);
+    return blocks;
+  }
+
+  function parseEdge(raw) {
+    const lines = raw.split('\n').slice(2);
+    const builds = [];
+    let cur = null;
+    for (const line of lines) {
+      if (!line.trim()) { if (cur) { builds.push(cur); cur = null; } continue; }
+      if (line.startsWith('Build:')) {
+        if (cur) builds.push(cur);
+        const m = line.match(/Build:\s*([^\s|]+)\s*\|?\s*Last Updated:\s*(.+)/);
+        cur = { build: m?.[1]?.trim() || '', date: m?.[2]?.trim() || '', titles: [] };
+      } else if (cur && line.trim().startsWith('- ')) {
+        cur.titles.push(line.trim().slice(2));
+      }
+    }
+    if (cur) builds.push(cur);
+    return builds;
+  }
+
+  // ── Renderers ──────────────────────────────────────────────────────────────
+  function renderUpdates(blocks) {
+    if (!blocks.length) return `<p style="color:var(--text-soft);font-size:0.88rem;padding:8px 0;">No updates found.</p>`;
+    return blocks.map(b => `
+      <div style="border:1.5px solid var(--pink-mid);border-radius:12px;padding:14px 16px;margin-bottom:10px;">
+        <div style="font-weight:700;font-size:0.95rem;color:var(--text);margin-bottom:8px;">${escapeHtml(b.product)}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:9px;">
+          ${b.kbs.map(kb => `<span style="background:var(--pink-light);color:var(--pink-dark);border-radius:6px;
+            padding:2px 8px;font-size:0.75rem;font-weight:700;">${escapeHtml(kb)}</span>`).join('')}
+        </div>
+        <ul style="margin:0;padding-left:16px;list-style:disc;">
+          ${b.titles.map(t => `<li style="font-size:0.81rem;color:var(--text);line-height:1.55;margin-bottom:3px;">${escapeHtml(t)}</li>`).join('')}
+        </ul>
+      </div>`).join('');
+  }
+
+  function renderEdge(builds) {
+    if (!builds.length) return `<p style="color:var(--text-soft);font-size:0.88rem;padding:8px 0;">No Edge updates found.</p>`;
+    return builds.map(b => `
+      <div style="border:1.5px solid var(--pink-mid);border-radius:12px;padding:14px 16px;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;">
+          <span style="font-weight:700;font-size:0.9rem;color:var(--pink-dark);">Build ${escapeHtml(b.build)}</span>
+          <span style="font-size:0.78rem;color:var(--text-soft);font-weight:500;">${escapeHtml(b.date)}</span>
+        </div>
+        <ul style="margin:0;padding-left:16px;list-style:disc;">
+          ${b.titles.map(t => `<li style="font-size:0.81rem;color:var(--text);line-height:1.55;margin-bottom:3px;">${escapeHtml(t)}</li>`).join('')}
+        </ul>
+      </div>`).join('');
+  }
+
+  const updateBlocks = parseUpdates(rawUpdates);
+  const edgeBuilds   = parseEdge(rawEdge);
+  const label2 = label;
 
   const overlay = document.createElement("div");
   overlay.id = "ms-updates-popup-overlay";
@@ -767,50 +857,48 @@ function showMsUpdatesPopup(text, filename, blobUrl) {
   `;
   overlay.innerHTML = `
     <div style="
-      background:#fff;border-radius:20px;padding:28px 32px;max-width:680px;width:100%;
-      box-shadow:0 12px 48px rgba(219,39,119,0.22);border:1.5px solid var(--pink-mid);
-      max-height:88vh;overflow-y:auto;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
-        <strong style="font-size:1.05rem;color:var(--pink-dark);">Microsoft Updates — ${escapeHtml(label)}</strong>
+      background:#fff;border-radius:20px;padding:28px 32px;
+      width:min(92vw,860px);max-height:90vh;overflow-y:auto;
+      box-shadow:0 12px 48px rgba(219,39,119,0.22);border:1.5px solid var(--pink-mid);">
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;">
+        <strong style="font-size:1.1rem;color:var(--pink-dark);">Microsoft Updates — ${escapeHtml(label2)}</strong>
         <button id="ms-popup-close"
                 style="background:none;border:none;cursor:pointer;font-size:1.1rem;
                        color:var(--text-soft);padding:2px 6px;font-weight:800;line-height:1;"
                 title="Close">&#x2715;</button>
       </div>
 
-      <div style="margin-bottom:20px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-          <strong style="font-size:0.9rem;color:var(--pink-dark);">Updates by Product</strong>
+      <div style="margin-bottom:24px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <span style="font-size:0.78rem;font-weight:700;text-transform:uppercase;
+                       letter-spacing:0.07em;color:var(--text-soft);">Updates by Product</span>
           <button id="ms-copy-updates"
-                  style="padding:5px 13px;border-radius:8px;border:1.5px solid var(--pink-mid);
-                         background:#fff;color:var(--pink-dark);font-size:0.78rem;font-weight:700;cursor:pointer;">
-            Copy
+                  style="padding:4px 12px;border-radius:7px;border:1.5px solid var(--pink-mid);
+                         background:#fff;color:var(--pink-dark);font-size:0.76rem;font-weight:700;cursor:pointer;">
+            Copy all
           </button>
         </div>
-        <pre style="background:#1e0a1a;color:#f9c8e8;padding:14px;border-radius:10px;
-                    font-size:0.73rem;max-height:220px;overflow:auto;white-space:pre-wrap;
-                    line-height:1.6;margin:0;">${escapeHtml(updatesSection)}</pre>
+        ${renderUpdates(updateBlocks)}
       </div>
 
       <div style="margin-bottom:24px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-          <strong style="font-size:0.9rem;color:var(--pink-dark);">Edge Updates</strong>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <span style="font-size:0.78rem;font-weight:700;text-transform:uppercase;
+                       letter-spacing:0.07em;color:var(--text-soft);">Edge Updates</span>
           <button id="ms-copy-edge"
-                  style="padding:5px 13px;border-radius:8px;border:1.5px solid var(--pink-mid);
-                         background:#fff;color:var(--pink-dark);font-size:0.78rem;font-weight:700;cursor:pointer;">
-            Copy
+                  style="padding:4px 12px;border-radius:7px;border:1.5px solid var(--pink-mid);
+                         background:#fff;color:var(--pink-dark);font-size:0.76rem;font-weight:700;cursor:pointer;">
+            Copy all
           </button>
         </div>
-        <pre style="background:#1e0a1a;color:#f9c8e8;padding:14px;border-radius:10px;
-                    font-size:0.73rem;max-height:220px;overflow:auto;white-space:pre-wrap;
-                    line-height:1.6;margin:0;">${escapeHtml(edgeSection)}</pre>
+        ${renderEdge(edgeBuilds)}
       </div>
 
-      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;padding-top:14px;border-top:1px solid var(--pink-mid);">
         <a href="${escapeHtml(blobUrl)}" download="${escapeHtml(filename)}"
            style="padding:9px 20px;border-radius:10px;text-decoration:none;color:#fff;
-                  background:linear-gradient(135deg,#f59e0b,#d97706);
-                  font-size:0.85rem;font-weight:700;">
+                  background:linear-gradient(135deg,#f59e0b,#d97706);font-size:0.85rem;font-weight:700;">
           Download .txt
         </a>
         <button id="ms-popup-close-btn"
@@ -824,16 +912,17 @@ function showMsUpdatesPopup(text, filename, blobUrl) {
 
   document.body.appendChild(overlay);
 
-  function copyBtn(id, content) {
+  function copyBtn(id, rawText) {
     document.getElementById(id).addEventListener("click", function() {
-      navigator.clipboard.writeText(content);
+      navigator.clipboard.writeText(rawText);
       this.textContent = "Copied!";
       this.style.background = "#ecfdf5";
       this.style.color = "#059669";
+      setTimeout(() => { this.textContent = "Copy all"; this.style.background = ""; this.style.color = ""; }, 2000);
     });
   }
-  copyBtn("ms-copy-updates", updatesSection);
-  copyBtn("ms-copy-edge",    edgeSection);
+  copyBtn("ms-copy-updates", rawUpdates);
+  copyBtn("ms-copy-edge",    rawEdge);
 
   document.getElementById("ms-popup-close").addEventListener("click",     () => overlay.remove());
   document.getElementById("ms-popup-close-btn").addEventListener("click", () => overlay.remove());
