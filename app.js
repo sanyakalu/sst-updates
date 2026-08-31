@@ -601,14 +601,33 @@ const GH_API_HEADERS = {
 const REPO = "sanyakalu/sst-updates";
 
 async function findWorkflowRun(afterISO) {
-  const url = `https://api.github.com/repos/${REPO}/actions/workflows/create-sticrs.yml/runs?per_page=5`;
-  for (let i = 0; i < 15; i++) {
-    await new Promise(r => setTimeout(r, 2000));
+  // Subtract 10 s to absorb browser/GitHub clock skew
+  const cutoff = new Date(new Date(afterISO).getTime() - 10000).toISOString();
+  const url    = `https://api.github.com/repos/${REPO}/actions/workflows/create-sticrs.yml/runs?per_page=5`;
+  await new Promise(r => setTimeout(r, 5000)); // initial wait for GitHub to register the run
+  for (let i = 0; i < 24; i++) {              // up to ~60 s total
     const data = await (await fetch(url, { headers: GH_API_HEADERS })).json();
-    const run  = (data.workflow_runs || []).find(r => r.created_at >= afterISO);
+    const run  = (data.workflow_runs || []).find(r => r.created_at >= cutoff);
     if (run) return run.id;
+    await new Promise(r => setTimeout(r, 2500));
   }
   return null;
+}
+
+async function fetchSticrResultsFromLogs(runId) {
+  try {
+    const jobs   = await (await fetch(`https://api.github.com/repos/${REPO}/actions/runs/${runId}/jobs`, { headers: GH_API_HEADERS })).json();
+    const jobId  = jobs.jobs?.[0]?.id;
+    if (!jobId) return null;
+    const logResp = await fetch(`https://api.github.com/repos/${REPO}/actions/jobs/${jobId}/logs`, { headers: GH_API_HEADERS });
+    if (!logResp.ok) return null;
+    const text  = await logResp.text();
+    const match = text.match(/##STICR_RESULTS##(.+)/);
+    if (!match) return null;
+    return JSON.parse(match[1]);
+  } catch {
+    return null;
+  }
 }
 
 async function pollWorkflowRun(runId) {
@@ -677,7 +696,8 @@ async function triggerSticrsWorkflow(userEmail) {
   if (run.conclusion === "success") {
     setStatus(`Done. ${sticrData.length} STICR(s) created.`, "ok", false);
     log(`Workflow completed: ${runUrl}`);
-    showWorkflowSticrPopup(sticrData, runUrl);
+    const logItems = await fetchSticrResultsFromLogs(run.id);
+    showWorkflowSticrPopup(logItems || sticrData, sticrProject, runUrl);
   } else if (run.conclusion === "timed_out") {
     setStatus("Workflow is taking longer than expected — check Actions tab.", "warn", false);
     log(`Actions: https://github.com/${REPO}/actions/workflows/create-sticrs.yml`);
@@ -687,15 +707,25 @@ async function triggerSticrsWorkflow(userEmail) {
   }
 }
 
-function showWorkflowSticrPopup(sticrData, runUrl) {
+function showWorkflowSticrPopup(items, project, runUrl) {
   const existing = document.getElementById("sticr-popup-overlay");
   if (existing) existing.remove();
 
-  const rows = sticrData.map(item =>
-    `<li style="margin-bottom:10px;">
-      <span style="color:var(--text-soft);font-size:0.82rem;">${escapeHtml(item.title)}</span>
-    </li>`
-  ).join("");
+  const ORG  = "PhilipsMA";
+  const rows = items.map(item => {
+    const adoUrl = item.id
+      ? `https://dev.azure.com/${ORG}/${encodeURIComponent(project)}/_workitems/edit/${item.id}`
+      : null;
+    return `<li style="margin-bottom:10px;">` +
+      (adoUrl
+        ? `<a href="${escapeHtml(adoUrl)}" target="_blank" rel="noopener"
+              style="font-weight:700;color:var(--pink-dark);text-decoration:none;font-size:0.92rem;">
+              #${item.id}
+           </a>
+           <span style="color:var(--text-soft);font-size:0.82rem;margin-left:6px;">${escapeHtml(item.title)}</span>`
+        : `<span style="color:var(--text-soft);font-size:0.82rem;">${escapeHtml(item.title)}</span>`) +
+      `</li>`;
+  }).join("");
 
   const overlay = document.createElement("div");
   overlay.id = "sticr-popup-overlay";
@@ -709,7 +739,7 @@ function showWorkflowSticrPopup(sticrData, runUrl) {
       box-shadow:0 12px 48px rgba(219,39,119,0.22);border:1.5px solid var(--pink-mid);
       max-height:80vh;overflow-y:auto;">
       <div style="font-weight:700;font-size:1.05rem;margin-bottom:16px;color:var(--pink-dark);">
-        ✓ ${sticrData.length} STICR${sticrData.length !== 1 ? "s" : ""} Created
+        ✓ ${items.length} STICR${items.length !== 1 ? "s" : ""} Created
       </div>
       <ul style="list-style:none;padding:0;margin:0 0 20px;">${rows}</ul>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">

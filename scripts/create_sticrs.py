@@ -40,6 +40,7 @@ for item in sticr_data:
         failed += 1
 
 print(f"\nSummary: {created} created, {failed} failed")
+print(f"##STICR_RESULTS##{json.dumps(created_items)}")
 
 summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
 if summary_path and created_items:
