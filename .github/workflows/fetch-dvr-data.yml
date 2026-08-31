@@ -11,7 +11,7 @@ on:
         required: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   fetch:
@@ -27,11 +27,3 @@ jobs:
         env:
           SST_ADO_PAT: ${{ secrets.SST_ADO_PAT }}
         run: python scripts/fetch_dvr_data.py --month ${{ inputs.month }} --year ${{ inputs.year }}
-
-      - name: Commit DVR data
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add dvr_data/
-          git diff --cached --quiet || git commit -m "chore: fetch DVR data for ${{ inputs.month }} ${{ inputs.year }}"
-          git push

@@ -443,22 +443,35 @@ async function boot() {
   }
 }
 
-// ── DVR data fetch — auto-triggers workflow if data not yet cached ─────────────
+// ── DVR data fetch — always fetches live from Azure DevOps via workflow ───────
+
+async function fetchDvrDataFromLogs(runId) {
+  try {
+    const jobs = await (await fetch(
+      `https://api.github.com/repos/${REPO}/actions/runs/${runId}/jobs`,
+      { headers: GH_API_HEADERS }
+    )).json();
+    const jobId = jobs.jobs?.[0]?.id;
+    if (!jobId) return null;
+    const logResp = await fetch(
+      `https://api.github.com/repos/${REPO}/actions/jobs/${jobId}/logs`,
+      { headers: GH_API_HEADERS }
+    );
+    if (!logResp.ok) return null;
+    const logText = await logResp.text();
+    const match   = logText.match(/##DVR_DATA_RESULT##(\S+)/);
+    if (!match) return null;
+    const jsonStr = new TextDecoder().decode(
+      Uint8Array.from(atob(match[1]), c => c.charCodeAt(0))
+    );
+    return JSON.parse(jsonStr);
+  } catch {
+    return null;
+  }
+}
 
 async function fetchDvrData(month, year) {
-  const rawBase = `https://raw.githubusercontent.com/${REPO}/main/dvr_data`;
-  const fileUrl = `${rawBase}/${month}_${year}.json`;
-
-  // Try cached file first (no workflow needed)
-  const cached = await fetch(fileUrl);
-  if (cached.ok) {
-    const data = await cached.json();
-    log(`DVR: loaded cached data (${data.testRows.length} test row(s), ${data.sticrItems.length} STICR(s))`);
-    return data;
-  }
-
-  // Not cached — trigger fetch workflow automatically
-  log(`DVR data for ${month} ${year} not cached. Triggering fetch workflow…`);
+  log(`DVR: fetching data for ${month} ${year} from Azure DevOps…`);
   setStatus("Fetching DVR data from Azure DevOps…", "", true);
 
   const dispatchTime = new Date().toISOString();
@@ -484,11 +497,9 @@ async function fetchDvrData(month, year) {
     throw new Error(`DVR fetch workflow ${run.conclusion} — check Actions tab.`);
   }
 
-  // Cache-bust the raw URL so we don't get GitHub's CDN stale copy
-  const fresh = await fetch(`${fileUrl}?t=${Date.now()}`);
-  if (!fresh.ok) throw new Error("DVR data not found after workflow completed — check Actions tab.");
+  const data = await fetchDvrDataFromLogs(run.id);
+  if (!data) throw new Error("DVR data not found in workflow logs — check Actions tab.");
 
-  const data = await fresh.json();
   log(`DVR: fetched ${data.testRows.length} test row(s), ${data.sticrItems.length} STICR(s)`);
   return data;
 }

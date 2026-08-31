@@ -96,10 +96,8 @@ for sid in sticr_ids:
         "description": item.get("fields", {}).get("System.Description", ""),
     })
 
-# ── Write output ──────────────────────────────────────────────────────────────
+# ── Emit result as tagged log line (read back by the browser via logs API) ────
 
-out_dir  = pathlib.Path("dvr_data")
-out_dir.mkdir(exist_ok=True)
-out_file = out_dir / f"{args.month}_{year}.json"
-out_file.write_text(json.dumps({"testRows": test_rows, "sticrItems": sticr_items}, indent=2))
-print(f"Written {out_file}")
+payload    = {"testRows": test_rows, "sticrItems": sticr_items}
+result_b64 = base64.b64encode(json.dumps(payload).encode('utf-8')).decode('ascii')
+print(f"##DVR_DATA_RESULT##{result_b64}")

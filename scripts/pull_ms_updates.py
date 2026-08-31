@@ -241,5 +241,3 @@ content = "\n\n\n".join([format_updates(proposed), format_edge(edge_df)])
 import base64
 result_b64 = base64.b64encode(content.encode('utf-8')).decode('ascii')
 print(f"##MS_UPDATES_RESULT##{result_b64}")
-
-print(f"Saved to {out_path}")
