@@ -403,21 +403,53 @@ async function boot() {
   }
 }
 
-// ── DVR data fetch from pre-committed JSON ────────────────────────────────────
+// ── DVR data fetch — auto-triggers workflow if data not yet cached ─────────────
 
 async function fetchDvrData(month, year) {
-  const rawBase = "https://raw.githubusercontent.com/sanyakalu/sst-updates/main/dvr_data";
-  const url = `${rawBase}/${month}_${year}.json`;
-  const resp = await fetch(url);
-  if (!resp.ok) {
-    throw new Error(
-      `DVR data for ${month} ${year} not found. ` +
-      `Run the "Fetch DVR Data" workflow first: Actions → Fetch DVR Data → ` +
-      `Run workflow (month: ${month}, year: ${year}).`
-    );
+  const rawBase = `https://raw.githubusercontent.com/${REPO}/main/dvr_data`;
+  const fileUrl = `${rawBase}/${month}_${year}.json`;
+
+  // Try cached file first (no workflow needed)
+  const cached = await fetch(fileUrl);
+  if (cached.ok) {
+    const data = await cached.json();
+    log(`DVR: loaded cached data (${data.testRows.length} test row(s), ${data.sticrItems.length} STICR(s))`);
+    return data;
   }
-  const data = await resp.json();
-  log(`DVR: loaded ${data.testRows.length} test row(s), ${data.sticrItems.length} STICR(s)`);
+
+  // Not cached — trigger fetch workflow automatically
+  log(`DVR data for ${month} ${year} not cached. Triggering fetch workflow…`);
+  setStatus("Fetching DVR data from Azure DevOps…", "", true);
+
+  const dispatchTime = new Date().toISOString();
+  const dispResp = await fetch(
+    `https://api.github.com/repos/${REPO}/actions/workflows/fetch-dvr-data.yml/dispatches`,
+    {
+      method:  "POST",
+      headers: { ...GH_API_HEADERS, "Content-Type": "application/json" },
+      body:    JSON.stringify({ ref: "main", inputs: { month, year } }),
+    }
+  );
+  if (dispResp.status !== 204) {
+    const err = await dispResp.text();
+    throw new Error(`Failed to trigger DVR fetch workflow (${dispResp.status}): ${err}`);
+  }
+
+  const runId = await findWorkflowRun(dispatchTime, "fetch-dvr-data.yml");
+  if (!runId) throw new Error("DVR fetch workflow run not found — check Actions tab.");
+
+  log("DVR workflow found. Waiting for completion…");
+  const run = await pollWorkflowRun(runId);
+  if (run.conclusion !== "success") {
+    throw new Error(`DVR fetch workflow ${run.conclusion} — check Actions tab.`);
+  }
+
+  // Cache-bust the raw URL so we don't get GitHub's CDN stale copy
+  const fresh = await fetch(`${fileUrl}?t=${Date.now()}`);
+  if (!fresh.ok) throw new Error("DVR data not found after workflow completed — check Actions tab.");
+
+  const data = await fresh.json();
+  log(`DVR: fetched ${data.testRows.length} test row(s), ${data.sticrItems.length} STICR(s)`);
   return data;
 }
 
@@ -600,10 +632,10 @@ const GH_API_HEADERS = {
 };
 const REPO = "sanyakalu/sst-updates";
 
-async function findWorkflowRun(afterISO) {
+async function findWorkflowRun(afterISO, workflow) {
   // Subtract 10 s to absorb browser/GitHub clock skew
   const cutoff = new Date(new Date(afterISO).getTime() - 10000).toISOString();
-  const url    = `https://api.github.com/repos/${REPO}/actions/workflows/create-sticrs.yml/runs?per_page=5`;
+  const url    = `https://api.github.com/repos/${REPO}/actions/workflows/${workflow}/runs?per_page=5`;
   await new Promise(r => setTimeout(r, 5000)); // initial wait for GitHub to register the run
   for (let i = 0; i < 24; i++) {              // up to ~60 s total
     const data = await (await fetch(url, { headers: GH_API_HEADERS })).json();
@@ -683,7 +715,7 @@ async function triggerSticrsWorkflow(userEmail) {
   setStatus(`Workflow running — waiting for ${sticrData.length} STICR(s) to be created…`, "", true);
   log("Workflow dispatched. Polling for completion…");
 
-  const runId = await findWorkflowRun(dispatchTime);
+  const runId = await findWorkflowRun(dispatchTime, "create-sticrs.yml");
   if (!runId) {
     setStatus("Workflow dispatched but run not found — check Actions tab.", "warn", false);
     log(`Actions: https://github.com/${REPO}/actions/workflows/create-sticrs.yml`);
