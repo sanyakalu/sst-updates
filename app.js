@@ -40,6 +40,9 @@ const els = {
   verDismiss:       document.getElementById("ver-dismiss"),
   doDvr:            document.getElementById("doDvr"),
   downloadDvr:      document.getElementById("download-dvr"),
+  doPullMsUpdates:   document.getElementById("doPullMsUpdates"),
+  downloadMsUpdates: document.getElementById("download-ms-updates"),
+  progressBar:       document.getElementById("progress-bar"),
 };
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -90,15 +93,38 @@ function isPhilipsEmail(v) {
 // ── Refresh run state ─────────────────────────────────────────────────────────
 
 function refreshRunState() {
-  const doDvr    = els.doDvr.checked;
-  const doMonthly = els.doMonthly.checked;
-  const doSticr   = els.doSticr.checked;
-  const doQualReg = els.doQualReg.checked;
+  const doDvr          = els.doDvr.checked;
+  const doMonthly      = els.doMonthly.checked;
+  const doSticr        = els.doSticr.checked;
+  const doQualReg      = els.doQualReg.checked;
+  const doPullMsUpdates = els.doPullMsUpdates.checked;
 
   const fieldPrev    = document.getElementById("field-prev");
   const fieldMonthly = document.getElementById("field-monthly");
   const fieldSticr   = document.getElementById("field-sticr");
   const fieldQualreg = document.getElementById("field-qualreg");
+
+  // MS Updates mode: hide all other features, show only month/year picker
+  if (doPullMsUpdates) {
+    fieldPrev.style.display    = "none";
+    document.getElementById("field-dvr").style.display = "none";
+    fieldMonthly.style.display = "none";
+    fieldSticr.style.display   = "none";
+    fieldQualreg.style.display = "none";
+    els.updSection.style.display       = "none";
+    els.monthYearSection.style.display = "block";
+    els.sticrWarning.style.display     = "none";
+    els.sticrProjectRow.style.display  = "none";
+    els.emailReveal.style.display      = "none";
+    els.emailErr.style.display         = "none";
+    els.verBanner.style.display        = "none";
+    els.run.textContent = "Pull Microsoft Updates";
+    const yearOk = /^\d{4}$/.test(els.year.value.trim());
+    els.run.disabled = !(!!selectedMonth && yearOk);
+    return;
+  }
+  // Restore field-dvr visibility when MS Updates is off
+  document.getElementById("field-dvr").style.display = "";
 
   // DVR mode: hide all SST inputs, show only month/year picker
   if (doDvr) {
@@ -207,10 +233,11 @@ els.year.addEventListener("input", refreshRunState);
 els.userEmail.addEventListener("input", refreshRunState);
 
 // ── Toggle wiring ─────────────────────────────────────────────────────────────
-els.doDvr.addEventListener("change",     refreshRunState);
-els.doMonthly.addEventListener("change", refreshRunState);
-els.doSticr.addEventListener("change",   refreshRunState);
-els.doQualReg.addEventListener("change", refreshRunState);
+els.doDvr.addEventListener("change",           refreshRunState);
+els.doMonthly.addEventListener("change",       refreshRunState);
+els.doSticr.addEventListener("change",         refreshRunState);
+els.doQualReg.addEventListener("change",       refreshRunState);
+els.doPullMsUpdates.addEventListener("change", refreshRunState);
 
 // ── STICR project selector ────────────────────────────────────────────────────
 els.btnProjTest.addEventListener("click", () => {
@@ -457,9 +484,10 @@ async function fetchDvrData(month, year) {
 
 async function generate() {
   els.run.disabled = true;
-  els.download.style.display    = "none";
-  els.downloadCsv.style.display = "none";
-  els.downloadDvr.style.display = "none";
+  els.download.style.display          = "none";
+  els.downloadCsv.style.display       = "none";
+  els.downloadDvr.style.display       = "none";
+  els.downloadMsUpdates.style.display = "none";
   els.log.textContent = "";
 
   const doMonthly = els.doMonthly.checked;
@@ -472,6 +500,13 @@ async function generate() {
   const userEmail = els.userEmail.value.trim();
 
   try {
+    // ── MS Updates branch ───────────────────────────────────────────────────
+    if (els.doPullMsUpdates.checked) {
+      await generateMsUpdates();
+      return;
+    }
+    // ── End MS Updates branch ────────────────────────────────────────────────
+
     // ── DVR branch ──────────────────────────────────────────────────────────
     if (els.doDvr.checked) {
       const month    = selectedMonth;
@@ -620,6 +655,82 @@ for k, v in json.loads(${JSON.stringify(JSON.stringify(qualEnv))}).items():
     );
     log(msg);
   } finally {
+    refreshRunState();
+  }
+}
+
+// ── MS Updates via GitHub Actions workflow dispatch ───────────────────────────
+
+async function generateMsUpdates() {
+  const month       = selectedMonth;
+  const year        = els.year.value.trim();
+  const monthNum    = MONTH_NUM[month];
+  const paddedMonth = String(monthNum).padStart(2, '0');
+
+  els.downloadMsUpdates.style.display = "none";
+  els.progressBar.classList.add("active");
+
+  try {
+    setStatus("Dispatching workflow — pulling from Microsoft Update Catalog...", "", true);
+    log("Dispatching pull-ms-updates workflow...");
+
+    const dispatchTime = new Date().toISOString();
+    const dispResp = await fetch(
+      `https://api.github.com/repos/${REPO}/actions/workflows/pull-ms-updates.yml/dispatches`,
+      {
+        method:  "POST",
+        headers: { ...GH_API_HEADERS, "Content-Type": "application/json" },
+        body:    JSON.stringify({ ref: "main", inputs: { month: String(monthNum), year } }),
+      }
+    );
+
+    if (dispResp.status !== 204) {
+      const err = await dispResp.text();
+      throw new Error(`Failed to dispatch workflow (${dispResp.status}): ${err}`);
+    }
+
+    setStatus("Workflow queued — waiting to start...", "", true);
+    const runId = await findWorkflowRun(dispatchTime, "pull-ms-updates.yml");
+    if (!runId) throw new Error("Workflow run not found — check the Actions tab.");
+
+    log(`Workflow run found (id: ${runId}). Polling for completion...`);
+    setStatus("Fetching updates from Microsoft Update Catalog — this may take a few minutes...", "", true);
+
+    const run = await pollWorkflowRun(runId);
+    const runUrl = `https://github.com/${REPO}/actions/runs/${run.id}`;
+
+    if (run.conclusion !== "success") {
+      throw new Error(`Workflow ${run.conclusion} — see Actions tab.\n${runUrl}`);
+    }
+
+    log("Workflow complete. Fetching results file...");
+    setStatus("Workflow complete — downloading results...", "", true);
+
+    await new Promise(r => setTimeout(r, 4000)); // let GitHub CDN propagate
+
+    const fileUrl = `https://raw.githubusercontent.com/${REPO}/main/ms_updates/${year}_${paddedMonth}.txt?t=${Date.now()}`;
+    const resp = await fetch(fileUrl);
+    if (!resp.ok) throw new Error("Results file not found after workflow completed — check the Actions tab.");
+
+    const text = await resp.text();
+    const blob = new Blob([text], { type: "text/plain" });
+    const url  = URL.createObjectURL(blob);
+    const filename = `ms_updates_${year}_${paddedMonth}.txt`;
+
+    els.downloadMsUpdates.href          = url;
+    els.downloadMsUpdates.download      = filename;
+    els.downloadMsUpdates.textContent   = `Download ${filename}`;
+    els.downloadMsUpdates.style.display = "block";
+
+    setStatus("Done. Your Microsoft Updates file is ready.", "ok", false);
+    log(`Saved: ${filename}`);
+
+  } catch (e) {
+    console.error(e);
+    setStatus("Failed: " + (e.message || e), "err", false);
+    log(String(e.stack || e));
+  } finally {
+    els.progressBar.classList.remove("active");
     refreshRunState();
   }
 }
