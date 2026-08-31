@@ -41,6 +41,11 @@ for item in sticr_data:
 
 print(f"\nSummary: {created} created, {failed} failed")
 
+import pathlib
+pathlib.Path("sticr_results.json").write_text(
+    json.dumps({"project": project, "items": created_items})
+)
+
 summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
 if summary_path and created_items:
     with open(summary_path, "a") as f:

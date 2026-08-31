@@ -594,6 +594,34 @@ for k, v in json.loads(${JSON.stringify(JSON.stringify(qualEnv))}).items():
 
 // ── STICR creation via GitHub Actions workflow dispatch ───────────────────────
 
+const GH_API_HEADERS = {
+  "Authorization": `Bearer ${GH_DISPATCH_TOKEN}`,
+  "Accept":        "application/vnd.github+json",
+};
+const REPO = "sanyakalu/sst-updates";
+
+async function findWorkflowRun(afterISO) {
+  const url = `https://api.github.com/repos/${REPO}/actions/workflows/create-sticrs.yml/runs?per_page=5`;
+  for (let i = 0; i < 15; i++) {
+    await new Promise(r => setTimeout(r, 2000));
+    const data = await (await fetch(url, { headers: GH_API_HEADERS })).json();
+    const run  = (data.workflow_runs || []).find(r => r.created_at >= afterISO);
+    if (run) return run.id;
+  }
+  return null;
+}
+
+async function pollWorkflowRun(runId) {
+  const url = `https://api.github.com/repos/${REPO}/actions/runs/${runId}`;
+  for (let i = 0; i < 60; i++) {
+    await new Promise(r => setTimeout(r, 5000));
+    const run = await (await fetch(url, { headers: GH_API_HEADERS })).json();
+    if (run.status === "completed") return run;
+    log(`Workflow status: ${run.status}…`);
+  }
+  return { conclusion: "timed_out", id: runId };
+}
+
 async function triggerSticrsWorkflow(userEmail) {
   let sticrData;
   try {
@@ -614,29 +642,92 @@ async function triggerSticrsWorkflow(userEmail) {
   const bytes      = new TextEncoder().encode(JSON.stringify(payload));
   const payloadB64 = btoa(String.fromCharCode(...bytes));
 
-  setStatus(`Triggering workflow to create ${sticrData.length} STICR(s)...`, "", true);
+  const dispatchTime = new Date().toISOString();
+  setStatus(`Triggering workflow to create ${sticrData.length} STICR(s)…`, "", true);
 
   const resp = await fetch(
-    "https://api.github.com/repos/sanyakalu/sst-updates/actions/workflows/create-sticrs.yml/dispatches",
+    `https://api.github.com/repos/${REPO}/actions/workflows/create-sticrs.yml/dispatches`,
     {
       method:  "POST",
-      headers: {
-        "Authorization": `Bearer ${GH_DISPATCH_TOKEN}`,
-        "Accept":        "application/vnd.github+json",
-        "Content-Type":  "application/json",
-      },
-      body: JSON.stringify({ ref: "main", inputs: { payload_b64: payloadB64 } }),
+      headers: { ...GH_API_HEADERS, "Content-Type": "application/json" },
+      body:    JSON.stringify({ ref: "main", inputs: { payload_b64: payloadB64 } }),
     }
   );
 
-  if (resp.status === 204) {
-    setStatus(`Document ready. ${sticrData.length} STICR(s) queued — workflow is running.`, "ok", false);
-    log(`STICRs dispatched to GitHub Actions (project: ${sticrProject}). Check: https://github.com/sanyakalu/sst-updates/actions/workflows/create-sticrs.yml`);
-  } else {
+  if (resp.status !== 204) {
     const err = await resp.text();
     setStatus(`Failed to trigger workflow (${resp.status}) — see log.`, "err", false);
     log(`Dispatch error: ${err}`);
+    return;
   }
+
+  setStatus(`Workflow running — waiting for ${sticrData.length} STICR(s) to be created…`, "", true);
+  log("Workflow dispatched. Polling for completion…");
+
+  const runId = await findWorkflowRun(dispatchTime);
+  if (!runId) {
+    setStatus("Workflow dispatched but run not found — check Actions tab.", "warn", false);
+    log(`Actions: https://github.com/${REPO}/actions/workflows/create-sticrs.yml`);
+    return;
+  }
+
+  const run = await pollWorkflowRun(runId);
+  const runUrl = `https://github.com/${REPO}/actions/runs/${run.id}`;
+
+  if (run.conclusion === "success") {
+    setStatus(`Done. ${sticrData.length} STICR(s) created.`, "ok", false);
+    log(`Workflow completed: ${runUrl}`);
+    showWorkflowSticrPopup(sticrData, runUrl);
+  } else if (run.conclusion === "timed_out") {
+    setStatus("Workflow is taking longer than expected — check Actions tab.", "warn", false);
+    log(`Actions: https://github.com/${REPO}/actions/workflows/create-sticrs.yml`);
+  } else {
+    setStatus(`Workflow ${run.conclusion} — see Actions tab for details.`, "err", false);
+    log(`Run: ${runUrl}`);
+  }
+}
+
+function showWorkflowSticrPopup(sticrData, runUrl) {
+  const existing = document.getElementById("sticr-popup-overlay");
+  if (existing) existing.remove();
+
+  const rows = sticrData.map(item =>
+    `<li style="margin-bottom:10px;">
+      <span style="color:var(--text-soft);font-size:0.82rem;">${escapeHtml(item.title)}</span>
+    </li>`
+  ).join("");
+
+  const overlay = document.createElement("div");
+  overlay.id = "sticr-popup-overlay";
+  overlay.style.cssText = `
+    position:fixed;inset:0;background:rgba(74,25,66,0.45);z-index:1000;
+    display:flex;align-items:center;justify-content:center;padding:20px;
+  `;
+  overlay.innerHTML = `
+    <div style="
+      background:#fff;border-radius:20px;padding:28px 32px;max-width:560px;width:100%;
+      box-shadow:0 12px 48px rgba(219,39,119,0.22);border:1.5px solid var(--pink-mid);
+      max-height:80vh;overflow-y:auto;">
+      <div style="font-weight:700;font-size:1.05rem;margin-bottom:16px;color:var(--pink-dark);">
+        ✓ ${sticrData.length} STICR${sticrData.length !== 1 ? "s" : ""} Created
+      </div>
+      <ul style="list-style:none;padding:0;margin:0 0 20px;">${rows}</ul>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <a href="${escapeHtml(runUrl)}" target="_blank" rel="noopener"
+           style="padding:8px 18px;border-radius:10px;background:var(--pink-dark);color:#fff;
+                  text-decoration:none;font-size:0.85rem;font-weight:600;">
+          View workflow run
+        </a>
+        <button onclick="document.getElementById('sticr-popup-overlay').remove()"
+                style="padding:8px 18px;border-radius:10px;border:1.5px solid var(--pink-mid);
+                       background:#fff;color:var(--pink-dark);font-size:0.85rem;font-weight:600;cursor:pointer;">
+          Close
+        </button>
+      </div>
+    </div>
+  `;
+  overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
 }
 
 function showSticrPopup(items) {
