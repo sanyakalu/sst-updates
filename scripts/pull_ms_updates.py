@@ -25,12 +25,17 @@ search_terms = [
     f'{year}-{month:02d}',
     'Edge Stable',
     'Edge Runtime',
-    'Microsoft Defender Antivirus antimalware platform',
+    'Defender Antivirus antimalware platform',
     'KB890830',
 ]
 
 exclude_from_title = [
-    'Windows Server 2012',
+    '23H2',
+    'Server 2008',
+    'Driver Update',
+    'Update Preview',
+    'Server 2012',
+    'Security Only Quality Update',
     'Security and Quality Rollup',
     'Security Monthly Quality Rollup',
     'Dynamic Update',
@@ -43,6 +48,7 @@ exclude_from_title = [
     '24H2',
     '22H2',
 ]
+
 
 qualifying_net_framework = '4.8 '
 
