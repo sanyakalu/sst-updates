@@ -152,7 +152,12 @@ def extract_products(titles_list):
         for pattern in patterns:
             m = re.search(pattern, title, re.IGNORECASE)
             if m:
-                normalized = m.group(0).title()
+                if m.group(0).lower() == 'microsoft server operating system version 21h2':
+                    print(m.group(0))
+                    # Special case: normalize to "Windows Server 2022"
+                    normalized = 'Windows Server 2022'
+                else:
+                    normalized = m.group(0).title()
                 # Shorten the server OS label to something readable
                 normalized = re.sub(
                     r'Microsoft Server Operating System Version',
