@@ -97,9 +97,9 @@ def parse_table_rows(soup):
             continue
         if (lu.year, lu.month) > (year, month):
             continue
-        if any(ex in title for ex in exclude_from_title):
+        if any(ex.lower() in title.lower() for ex in exclude_from_title):
             continue
-        if '.NET Framework' in title and qualifying_net_framework not in title:
+        if '.net framework' in title.lower() and qualifying_net_framework.lower() not in title.lower():
             continue
         page_rows.append((title, last_updated))
 
@@ -130,9 +130,9 @@ def pull_catalog_table():
                 print(f"  No rows on page {page}, stopping term.")
                 break
 
-            new_rows = [(t, lu) for t, lu in page_rows if t not in seen_titles]
+            new_rows = [(t, lu) for t, lu in page_rows if t.lower() not in seen_titles]
             for t, lu in new_rows:
-                seen_titles.add(t)
+                seen_titles.add(t.lower())
             all_rows.extend(new_rows)
             if new_rows:
                 print(f"  -> {len(new_rows)} result(s)")
@@ -144,7 +144,7 @@ def pull_catalog_table():
             page += 1
 
     seen = set()
-    return [r for r in all_rows if r[0] not in seen and not seen.add(r[0])]
+    return [r for r in all_rows if r[0].lower() not in seen and not seen.add(r[0].lower())]
 
 
 def extract_products(titles_list):
@@ -187,8 +187,8 @@ def extract_kb(title):
 
 
 def build_dataframes(table_results):
-    edge_rows  = [(t, lu) for t, lu in table_results if 'Microsoft Edge' in t]
-    other_rows = [(t, lu) for t, lu in table_results if 'Microsoft Edge' not in t]
+    edge_rows  = [(t, lu) for t, lu in table_results if 'microsoft edge' in t.lower()]
+    other_rows = [(t, lu) for t, lu in table_results if 'microsoft edge' not in t.lower()]
 
     if edge_rows:
         edge_df = pd.DataFrame(
