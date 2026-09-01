@@ -502,11 +502,11 @@ async function fetchDvrData(month, year) {
 
   const dispatchTime = new Date().toISOString();
   const dispResp = await fetch(
-    `https://api.github.com/repos/${REPO}/actions/workflows/fetch-dvr-data.yml/dispatches`,
+    `https://api.github.com/repos/${REPO}/actions/workflows/run.yml/dispatches`,
     {
       method:  "POST",
       headers: { ...GH_API_HEADERS, "Content-Type": "application/json" },
-      body:    JSON.stringify({ ref: "main", inputs: { month, year } }),
+      body:    JSON.stringify({ ref: "main", inputs: { mode: "fetch-dvr-data", month, year } }),
     }
   );
   if (dispResp.status !== 204) {
@@ -514,7 +514,7 @@ async function fetchDvrData(month, year) {
     throw new Error(`Failed to trigger DVR fetch workflow (${dispResp.status}): ${err}`);
   }
 
-  const runId = await findWorkflowRun(dispatchTime, "fetch-dvr-data.yml");
+  const runId = await findWorkflowRun(dispatchTime, "run.yml");
   if (!runId) throw new Error("DVR fetch workflow run not found — check Actions tab.");
 
   log("DVR workflow found. Waiting for completion…");
@@ -746,15 +746,15 @@ async function generateMsUpdates() {
 
   try {
     setStatus("Dispatching workflow — pulling from Microsoft Update Catalog...", "", true);
-    log("Dispatching pull-ms-updates workflow...");
+    log("Dispatching ms-updates workflow...");
 
     const dispatchTime = new Date().toISOString();
     const dispResp = await fetch(
-      `https://api.github.com/repos/${REPO}/actions/workflows/pull-ms-updates.yml/dispatches`,
+      `https://api.github.com/repos/${REPO}/actions/workflows/run.yml/dispatches`,
       {
         method:  "POST",
         headers: { ...GH_API_HEADERS, "Content-Type": "application/json" },
-        body:    JSON.stringify({ ref: "main", inputs: { month: String(monthNum), year } }),
+        body:    JSON.stringify({ ref: "main", inputs: { mode: "ms-updates", month: String(monthNum), year } }),
       }
     );
 
@@ -764,7 +764,7 @@ async function generateMsUpdates() {
     }
 
     setStatus("Workflow queued — waiting to start...", "", true);
-    const runId = await findWorkflowRun(dispatchTime, "pull-ms-updates.yml");
+    const runId = await findWorkflowRun(dispatchTime, "run.yml");
     if (!runId) throw new Error("Workflow run not found — check the Actions tab.");
 
     log(`Workflow run found (id: ${runId}). Polling for completion...`);
@@ -1039,11 +1039,11 @@ async function triggerSticrsWorkflow(userEmail) {
   setStatus(`Triggering workflow to create ${sticrData.length} STICR(s)…`, "", true);
 
   const resp = await fetch(
-    `https://api.github.com/repos/${REPO}/actions/workflows/create-sticrs.yml/dispatches`,
+    `https://api.github.com/repos/${REPO}/actions/workflows/run.yml/dispatches`,
     {
       method:  "POST",
       headers: { ...GH_API_HEADERS, "Content-Type": "application/json" },
-      body:    JSON.stringify({ ref: "main", inputs: { payload_b64: payloadB64 } }),
+      body:    JSON.stringify({ ref: "main", inputs: { mode: "create-sticrs", payload_b64: payloadB64 } }),
     }
   );
 
@@ -1057,10 +1057,10 @@ async function triggerSticrsWorkflow(userEmail) {
   setStatus(`Workflow running — waiting for ${sticrData.length} STICR(s) to be created…`, "", true);
   log("Workflow dispatched. Polling for completion…");
 
-  const runId = await findWorkflowRun(dispatchTime, "create-sticrs.yml");
+  const runId = await findWorkflowRun(dispatchTime, "run.yml");
   if (!runId) {
     setStatus("Workflow dispatched but run not found — check Actions tab.", "warn", false);
-    log(`Actions: https://github.com/${REPO}/actions/workflows/create-sticrs.yml`);
+    log(`Actions: https://github.com/${REPO}/actions/workflows/run.yml`);
     return;
   }
 
@@ -1074,7 +1074,7 @@ async function triggerSticrsWorkflow(userEmail) {
     showWorkflowSticrPopup(logItems || sticrData, sticrProject, runUrl);
   } else if (run.conclusion === "timed_out") {
     setStatus("Workflow is taking longer than expected — check Actions tab.", "warn", false);
-    log(`Actions: https://github.com/${REPO}/actions/workflows/create-sticrs.yml`);
+    log(`Actions: https://github.com/${REPO}/actions/workflows/run.yml`);
   } else {
     setStatus(`Workflow ${run.conclusion} — see Actions tab for details.`, "err", false);
     log(`Run: ${runUrl}`);

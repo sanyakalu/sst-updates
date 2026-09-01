@@ -1,0 +1,38 @@
+name: SST Tool Runner
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'ms-updates | fetch-dvr-data | create-sticrs'
+        required: true
+      month:
+        description: 'Month — ms-updates: number 1-12, fetch-dvr-data: 3-letter e.g. Jan'
+        required: false
+      year:
+        description: 'Year (e.g. 2026)'
+        required: false
+      payload_b64:
+        description: 'Base64 STICR payload (create-sticrs only)'
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4 pandas lxml
+
+      - name: Run
+        env:
+          MODE:        ${{ inputs.mode }}
+          MONTH:       ${{ inputs.month }}
+          YEAR:        ${{ inputs.year }}
+          PAYLOAD_B64: ${{ inputs.payload_b64 }}
+          SST_ADO_PAT: ${{ secrets.SST_ADO_PAT }}
+        run: python scripts/run.py
