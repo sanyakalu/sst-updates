@@ -90,14 +90,55 @@ function isPhilipsEmail(v) {
   return /^[^\s@]+@philips\.com$/i.test(v.trim());
 }
 
+// ── Month availability ────────────────────────────────────────────────────────
+
+function updateMonthAvailability() {
+  const now          = new Date();
+  const currentYear  = now.getFullYear();
+  const currentMonth = now.getMonth(); // 0-indexed: Jan=0, Dec=11
+
+  const yearVal = parseInt(els.year.value.trim(), 10);
+  const yearOk  = !isNaN(yearVal) && /^\d{4}$/.test(els.year.value.trim());
+
+  els.monthGrid.querySelectorAll(".month-btn").forEach((btn, i) => {
+    const isFuture = yearOk && (
+      yearVal > currentYear ||
+      (yearVal === currentYear && i > currentMonth)
+    );
+    btn.disabled = isFuture;
+  });
+
+  // Deselect the active month if it has become future (disabled)
+  if (selectedMonth) {
+    const selBtn = els.monthGrid.querySelector(`.month-btn[data-month="${selectedMonth}"]`);
+    if (selBtn && selBtn.disabled) {
+      selBtn.classList.remove("selected");
+      selectedMonth = null;
+    }
+  }
+}
+
 // ── Refresh run state ─────────────────────────────────────────────────────────
 
 function refreshRunState() {
-  const doDvr          = els.doDvr.checked;
-  const doMonthly      = els.doMonthly.checked;
-  const doSticr        = els.doSticr.checked;
-  const doQualReg      = els.doQualReg.checked;
-  const doPullMsUpdates = els.doPullMsUpdates.checked;
+  let doDvr           = els.doDvr.checked;
+  let doMonthly       = els.doMonthly.checked;
+  let doSticr         = els.doSticr.checked;
+  let doQualReg       = els.doQualReg.checked;
+  let doPullMsUpdates = els.doPullMsUpdates.checked;
+
+  const anySstTool = doMonthly || doSticr || doQualReg;
+
+  // Mutual exclusivity: SST tools block DVR and MS Updates; DVR blocks MS Updates
+  if (anySstTool && doPullMsUpdates) { els.doPullMsUpdates.checked = false; doPullMsUpdates = false; }
+  if (anySstTool && doDvr)           { els.doDvr.checked = false; doDvr = false; }
+  if (doDvr && doPullMsUpdates)      { els.doPullMsUpdates.checked = false; doPullMsUpdates = false; }
+
+  // Show/hide toggle rows based on what's active
+  document.getElementById("field-ms-updates").style.display = (doDvr || anySstTool) ? "none" : "";
+  document.getElementById("field-dvr").style.display        = (doPullMsUpdates || anySstTool) ? "none" : "";
+
+  updateMonthAvailability();
 
   const fieldPrev    = document.getElementById("field-prev");
   const fieldMonthly = document.getElementById("field-monthly");
@@ -107,7 +148,6 @@ function refreshRunState() {
   // MS Updates mode: hide all other features, show only month/year picker
   if (doPullMsUpdates) {
     fieldPrev.style.display    = "none";
-    document.getElementById("field-dvr").style.display = "none";
     fieldMonthly.style.display = "none";
     fieldSticr.style.display   = "none";
     fieldQualreg.style.display = "none";
@@ -121,23 +161,9 @@ function refreshRunState() {
     els.run.textContent = "Pull Microsoft Updates";
     const yearVal = els.year.value.trim();
     const yearOk  = /^\d{4}$/.test(yearVal);
-    if (!!selectedMonth && yearOk) {
-      const now       = new Date();
-      const selMonNum = MONTH_NUM[selectedMonth];
-      const selYear   = parseInt(yearVal, 10);
-      const isFuture  = selYear > now.getFullYear() ||
-        (selYear === now.getFullYear() && selMonNum > now.getMonth() + 1);
-      if (isFuture) {
-        setStatus(`${selectedMonth} ${yearVal} hasn't happened yet — select a past or current month.`, "warn", false);
-        els.run.disabled = true;
-        return;
-      }
-    }
     els.run.disabled = !(!!selectedMonth && yearOk);
     return;
   }
-  // Restore field-dvr visibility when MS Updates is off
-  document.getElementById("field-dvr").style.display = "";
 
   // DVR mode: hide all SST inputs, show only month/year picker
   if (doDvr) {
@@ -233,7 +259,7 @@ function refreshRunState() {
 
 els.monthGrid.addEventListener("click", e => {
   const btn = e.target.closest(".month-btn");
-  if (!btn) return;
+  if (!btn || btn.disabled) return;
   els.monthGrid.querySelectorAll(".month-btn").forEach(b => b.classList.remove("selected"));
   btn.classList.add("selected");
   selectedMonth = btn.dataset.month;
