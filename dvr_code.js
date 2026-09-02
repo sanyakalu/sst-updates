@@ -205,7 +205,9 @@ def create_test_table(doc, table_df):
             cell.width = Inches(width)
 
 # ── Plan summary table ────────────────────────────────────────────────────────
-plan_summary = df[['Plan ID', 'Plan Name']].drop_duplicates() if not df.empty else pd.DataFrame(columns=['Plan ID', 'Plan Name'])
+# Only include plans that have at least one row from a supported release (4.x or C.x)
+_valid_plan_ids = set(df.loc[df['Pipeline Run'].str.startswith(('4', 'C'), na=False), 'Plan ID']) if not df.empty else set()
+plan_summary = df[df['Plan ID'].isin(_valid_plan_ids)][['Plan ID', 'Plan Name']].drop_duplicates() if not df.empty else pd.DataFrame(columns=['Plan ID', 'Plan Name'])
 
 summary_table = doc.add_table(rows=1, cols=3)
 summary_table.style = "Table Grid"
