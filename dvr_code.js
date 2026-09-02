@@ -533,7 +533,8 @@ if not sticr_df.empty:
         r'^.*?(\.NET\s+\d+\.\d+).*$': r'\1',
     }
     for _sv_pattern, _sv_replacement in _special_versioning.items():
-        _sv_mask = sticr_df["Notes / Instructions"].str.contains(_sv_pattern, regex=True, na=False)
+        _sv_mask_pat = _sv_pattern.replace('(', '(?:').replace('(?:?', '(?')
+        _sv_mask = sticr_df["Notes / Instructions"].str.contains(_sv_mask_pat, regex=True, na=False)
         sticr_df.loc[_sv_mask, "Notes / Instructions"] = (
             sticr_df.loc[_sv_mask, "Notes / Instructions"]
             .str.replace(_sv_pattern, _sv_replacement, regex=True)
