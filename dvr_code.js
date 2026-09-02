@@ -75,25 +75,15 @@ special_products = ["Crowdstrike", "VMWare", "SQL Server", "Symantec", "TrendMic
 special_pattern = '|'.join(re.escape(p) for p in special_products)
 
 # ── Build df from injected test rows ──────────────────────────────────────────
-_cols = ['Plan ID', 'Plan Name', 'Run Name', 'Run ID', 'Run State',
-         'Outcome', 'Test Case Name', 'Test Case ID']
+_cols = ['Plan ID', 'Suite ID', 'Plan Name', 'Suite Name', 'Run ID', 'Run Name',
+         'Outcome', 'Test Case Name', 'Test Case ID', 'Pipeline Run']
 df = pd.DataFrame(_test_rows or [], columns=_cols)
 
 if not df.empty:
-    df['Run Name'] = df['Run Name'].str.replace(r'\(Manual\)', '', regex=True).str.strip()
-    df['Version']  = df['Run Name'].str.extract(r'([A-Za-z0-9]*\.[A-Za-z0-9.]+)', expand=False)
-
-    def get_doc_table(row):
-        if re.search(special_pattern, str(row['Plan Name']), re.IGNORECASE):
-            return 'Test Summary-' + str(row['Plan Name'])
-        if re.search(r'\biX\b', str(row['Run Name']), re.IGNORECASE):
-            return 'Test Summary-OS Security Updates'
-        return 'Test Summary-' + str(row['Run Name'])
-
-    df['Doc Table'] = df.apply(get_doc_table, axis=1)
+    df['Doc Table'] = 'Test Summary-' + df['Plan Name'].astype(str)
+    _os_mask = df['Plan Name'].str.contains(r'OS Security Test Plan', case=False, na=False)
+    df.loc[_os_mask, 'Doc Table'] = 'Test Summary-OS Security Updates'
 else:
-    df['Run Name']  = pd.Series(dtype=str)
-    df['Version']   = pd.Series(dtype=str)
     df['Doc Table'] = pd.Series(dtype=str)
 
 def determine_section(test_case_name):
@@ -111,27 +101,11 @@ doc_df = pd.DataFrame({
     "Section":         df.get('Section',        pd.Series(dtype=str)),
     "Test Case ID":    df.get('Test Case ID',   pd.Series(dtype=str)),
     "Test Case Title": df.get('Test Case Name', pd.Series(dtype=str)),
-    "PIC iX Build":    df.get('Version',        pd.Series(dtype=str)),
+    "PIC iX Build":    df.get('Pipeline Run',   pd.Series(dtype=str)),
     "Run Name":        df.get('Run Name',       pd.Series(dtype=str)),
     "Run ID":          df.get('Run ID',         pd.Series(dtype=str)),
     "Result":          df.get('Outcome',        pd.Series(dtype=str)),
 })
-
-# ── Split tables where same Test Case ID appears with different Run Names ─────
-OS_SECURITY_TABLE = "Test Summary-OS Security Updates"
-conflicting_tables = set()
-for (table, section, tc_id), grp in doc_df.groupby(["Table", "Section", "Test Case ID"]):
-    if table == OS_SECURITY_TABLE:
-        continue
-    if grp["Run Name"].nunique() > 1:
-        conflicting_tables.add(table)
-
-if conflicting_tables:
-    mask = doc_df["Table"].isin(conflicting_tables)
-    doc_df.loc[mask, "Table"] = "Test Summary-" + doc_df.loc[mask, "Run Name"]
-    print(f"Split {len(conflicting_tables)} table(s) by Run Name")
-else:
-    print("No conflicting tables found.")
 
 # ── Find insert point ─────────────────────────────────────────────────────────
 _target_section = "Design Verification Results"
@@ -503,6 +477,12 @@ if not sticr_df.empty:
         _parsed = sticr_df.loc[_edge_mask, "KB Updates"].apply(parse_edge_line)
         sticr_df.loc[_edge_mask, "KB numbers"]          = _parsed.apply(lambda x: x[0])
         sticr_df.loc[_edge_mask, "Notes / Instructions"] = _parsed.apply(lambda x: x[1])
+        # Normalise Edge component names to consistent hyphenated form
+        sticr_df.loc[_edge_mask, "KB numbers"] = (
+            sticr_df.loc[_edge_mask, "KB numbers"]
+            .str.replace("Microsoft Edge Stable Channel", "Microsoft Edge-Stable Channel", regex=False)
+            .str.replace("Microsoft Edge WebView2", "Microsoft Edge-WebView2", regex=False)
+        )
 
     # SSU: must install before other updates
     _ssu_mask = sticr_df["Notes / Instructions"].str.contains("Servicing Stack Update for Windows", na=False)
@@ -608,6 +588,27 @@ else:
 print(f"STICR rows after processing: {len(sticr_df)}")
 
 # ── STICR table ───────────────────────────────────────────────────────────────
+def _norm(s):
+    s = str(s).replace('\xa0', ' ').replace('\u200b', '').replace('\u200c', '').replace('\u200d', '')
+    s = s.replace('-', ' ')
+    return re.sub(r'\s+', ' ', s).strip().lower()
+
+def collapse_sticr_ids(df_in):
+    seen = {}
+    rows = []
+    for _, row in df_in.iterrows():
+        key = (_norm(row['Product Name']), _norm(row['Notes / Instructions']))
+        if key in seen:
+            new_id = str(row['STICR ID'])
+            if new_id not in seen[key]['STICR ID'].split('\n'):
+                seen[key]['STICR ID'] += '\n' + new_id
+        else:
+            r = row.to_dict()
+            r['STICR ID'] = str(r['STICR ID'])
+            seen[key] = r
+            rows.append(r)
+    return pd.DataFrame(rows)
+
 def has_version_info(notes):
     return bool(re.search(r'v\d+[.\d]*|\d+\.\d+|Build|\.exe', str(notes), re.IGNORECASE))
 
@@ -615,7 +616,7 @@ def numbered_installs(rca_text):
     items = [item.strip() for item in re.split(r'Install:\s*', str(rca_text)) if item.strip()]
     return "\n".join(f"{i}. {item}" for i, item in enumerate(items, 1))
 
-def create_sticr_table(doc, sticr_df):
+def create_sticr_table(doc, collapse_sticr_ids(sticr_df)):
     table = doc.add_table(rows=1, cols=5)
     table.style = "Table Grid"
     headers = ["Product Name", "Product Number", "Software Revision",
@@ -644,7 +645,12 @@ def create_sticr_table(doc, sticr_df):
             else:
                 cells[2].add_paragraph(_line)
         cells[3].text = get_verification_equipment(str(item["Product Name"]))
-        cells[4].text = str(item["STICR ID"])
+        cells[4].text = ""
+        for _j, _line in enumerate(str(item["STICR ID"]).split("\n")):
+            if _j == 0:
+                cells[4].paragraphs[0].add_run(_line)
+            else:
+                cells[4].add_paragraph(_line)
         for cell in cells:
             set_cell_font(cell)
     widths = [2.5, 1.0, 2.5, 1.2, 0.8]
@@ -656,7 +662,7 @@ _sticr_heading = doc.add_heading("Description of Product(s) Under Test", level=3
 current.addnext(_sticr_heading._element)
 current = _sticr_heading._element
 
-create_sticr_table(doc, sticr_df)
+create_sticr_table(doc, collapse_sticr_ids(sticr_df))
 _sticr_table_elem = doc.tables[-1]._element
 current.addnext(_sticr_table_elem)
 current = _sticr_table_elem
