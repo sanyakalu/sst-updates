@@ -267,7 +267,7 @@ def run_fetch_dvr_data(month: str, year: str):
     month_end   = f"{year}-{month_num:02d}-15"
 
     KEYWORDS  = [
-        "Crowdstrike","VMWare","OS Security","SQL Server","Symantec",
+        "Crowdstrike","VMWare", "Security","SQL Server","Symantec",
         "TrendMicro","Trellix","VMware","Nutanix","Hyper-V","Microsoft Security Updates",
     ]
     kw_clauses = " OR ".join(f"[System.Title] CONTAINS '{k}'" for k in KEYWORDS)
