@@ -528,7 +528,7 @@
         </div>
       </div>
 
-      <!-- Pull MS Updates toggle — when on, hides all other inputs -->
+      <!-- 1. Pull MS Updates -->
       <div class="field" id="field-ms-updates" style="margin-bottom:10px;">
         <div class="sticr-toggle-row">
           <div class="toggle-label">
@@ -542,34 +542,7 @@
         </div>
       </div>
 
-      <!-- DVR toggle — when on, hides all other inputs -->
-      <div class="field" id="field-dvr" style="margin-bottom:10px;">
-        <div class="sticr-toggle-row">
-          <div class="toggle-label">
-            Create DVR?
-            <small>Generates the Design Verification Report from Azure DevOps test data.</small>
-          </div>
-          <label class="switch">
-            <input type="checkbox" id="doDvr" />
-            <span class="slider"></span>
-          </label>
-        </div>
-      </div>
-
-      <!-- Three toggles -->
-      <div class="field" id="field-monthly" style="margin-bottom:10px;">
-        <div class="sticr-toggle-row">
-          <div class="toggle-label">
-            Fill out monthly SST updates?
-            <small>Generates the updated Security Status Table document.</small>
-          </div>
-          <label class="switch">
-            <input type="checkbox" id="doMonthly" />
-            <span class="slider"></span>
-          </label>
-        </div>
-      </div>
-
+      <!-- 2. Create STICRs -->
       <div class="field" id="field-sticr" style="margin-bottom:10px;">
         <div class="sticr-toggle-row">
           <div class="toggle-label">
@@ -588,7 +561,22 @@
         </div>
       </div>
 
-      <div class="field" id="field-qualreg" style="margin-bottom:22px;">
+      <!-- 3. Fill out monthly SST updates -->
+      <div class="field" id="field-monthly" style="margin-bottom:10px;">
+        <div class="sticr-toggle-row">
+          <div class="toggle-label">
+            Fill out monthly SST updates?
+            <small>Generates the updated Security Status Table document.</small>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="doMonthly" />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- 4. Create historical qualification file -->
+      <div class="field" id="field-qualreg" style="margin-bottom:10px;">
         <div class="sticr-toggle-row">
           <div class="toggle-label">
             Create historical qualification file?
@@ -596,6 +584,20 @@
           </div>
           <label class="switch">
             <input type="checkbox" id="doQualReg" />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- 5. Create DVR -->
+      <div class="field" id="field-dvr" style="margin-bottom:22px;">
+        <div class="sticr-toggle-row">
+          <div class="toggle-label">
+            Create DVR?
+            <small>Generates the Design Verification Report from Azure DevOps test data.</small>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="doDvr" />
             <span class="slider"></span>
           </label>
         </div>

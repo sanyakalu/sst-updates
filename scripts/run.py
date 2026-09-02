@@ -281,27 +281,62 @@ def run_fetch_dvr_data(month: str, year: str):
     plan_ids = [w["id"] for w in plan_resp.json().get("workItems", [])]
     print(f"DVR: found {len(plan_ids)} test plan(s)")
 
-    test_rows = []
+    test_rows  = []
+    run_cache  = {}
+
     for plan_id in plan_ids:
         plan = requests.get(
             f"https://dev.azure.com/{ORG}/{PROJECT}/_apis/testplan/plans/{plan_id}?api-version=7.1",
             headers=get_hdrs,
         ).json()
-        runs = requests.get(
-            f"https://dev.azure.com/{ORG}/{PROJECT}/_apis/test/runs?planId={plan_id}&api-version=7.1",
+        plan_name = plan.get("name", "")
+
+        suites = requests.get(
+            f"https://dev.azure.com/{ORG}/{PROJECT}/_apis/testplan/plans/{plan_id}/suites?api-version=7.1",
             headers=get_hdrs,
         ).json().get("value", [])
-        for run in runs:
-            results = requests.get(
-                f"https://dev.azure.com/{ORG}/{PROJECT}/_apis/test/runs/{run['id']}/results?api-version=7.1",
+
+        for suite in suites:
+            suite_id   = suite["id"]
+            suite_name = suite["name"]
+
+            points = requests.get(
+                f"https://dev.azure.com/{ORG}/{PROJECT}/_apis/testplan/plans/{plan_id}"
+                f"/suites/{suite_id}/TestPoint?includePointDetails=true&api-version=7.1",
                 headers=get_hdrs,
             ).json().get("value", [])
-            for r in results:
+
+            for point in points:
+                last_result    = point.get("results") or {}
+                outcome        = last_result.get("outcome", "N/A")
+                run_id         = last_result.get("lastTestRunId") or "N/A"
+                pipeline_run   = last_result.get("lastRunBuildNumber", "N/A")
+                test_case_id   = (point.get("testCaseReference") or {}).get("id", "N/A")
+                test_case_name = (point.get("testCaseReference") or {}).get("name", "N/A")
+
+                run_name = "N/A"
+                if run_id != "N/A":
+                    if run_id not in run_cache:
+                        run_data = requests.get(
+                            f"https://dev.azure.com/{ORG}/{PROJECT}/_apis/test/runs/{run_id}?api-version=7.1",
+                            headers=get_hdrs,
+                        ).json()
+                        raw_name = run_data.get("name", "N/A")
+                        run_cache[run_id] = re.sub(r'\s*\(Manual\)', '', raw_name).strip()
+                    run_name = run_cache[run_id]
+
+                # strip PIIC_iX_ prefix and filter to relevant builds
+                if isinstance(pipeline_run, str) and pipeline_run.startswith("PIIC_iX_"):
+                    pipeline_run = pipeline_run[len("PIIC_iX_"):]
+                if not isinstance(pipeline_run, str) or not pipeline_run[:1] in ("4", "C", "B"):
+                    continue
+
                 test_rows.append([
-                    plan_id, plan.get("name", ""), run.get("name", ""), run["id"],
-                    run.get("state", "N/A"), r.get("outcome", "N/A"),
-                    r.get("testCaseTitle", "N/A"), (r.get("testCase") or {}).get("id", "N/A"),
+                    plan_id, suite_id, plan_name, suite_name,
+                    run_id, run_name, outcome,
+                    test_case_name, test_case_id, pipeline_run,
                 ])
+
     print(f"DVR: fetched {len(test_rows)} test result(s)")
 
     sticr_resp = requests.post(WIQL_URL, headers=hdrs, json={"query":
