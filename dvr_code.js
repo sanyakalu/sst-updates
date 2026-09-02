@@ -384,6 +384,15 @@ for _si in _sticr_items_raw:
 sticr_df = pd.DataFrame(_sticr_rows or [], columns=["Section", "Product", "KB Updates", "STICR ID"])
 
 if not sticr_df.empty:
+    # Drop specialty entries early so move_mask targets KB rows correctly
+    _noise_mask = (
+        sticr_df['KB Updates'].str.match(r'^CVE-\d{4}', case=False, na=False)
+        | sticr_df['KB Updates'].str.match(r'^7-Zip', case=False, na=False)
+        | sticr_df['KB Updates'].str.match(r'^Visual Studio', case=False, na=False)
+        | sticr_df['KB Updates'].str.match(r'^https?://', case=False, na=False)
+    )
+    sticr_df = sticr_df[~_noise_mask].reset_index(drop=True)
+
     sticr_df['KB numbers'] = sticr_df['KB Updates'].apply(
         lambda x: list(dict.fromkeys(re.findall(r'KB\d+|CVE-\d{4}-\d+', str(x))))
     )
@@ -414,7 +423,7 @@ if not sticr_df.empty:
         if '.exe' in _val.lower():
             _m = re.search(r"([^\s]+\.exe)\b", _val, flags=re.IGNORECASE)
             if _m:
-                _val = _m.group(1)
+                _val = re.sub(r'^\(KB\d+\)', '', _m.group(1))
         _text = f"Install: {_val}"
         _existing = sticr_df.loc[_target, "Recommended Customer Action"]
         sticr_df.loc[_target, "Recommended Customer Action"] = (
@@ -620,7 +629,8 @@ def collapse_sticr_ids(df_in):
     seen = {}
     rows = []
     for _, row in df_in.iterrows():
-        key = (_norm(row['Product Name']), _norm(row['Notes / Instructions']))
+        _pn = _norm(row['Product Name'])
+        key = (_pn, '' if _pn.startswith('cve ') else _norm(row['Notes / Instructions']))
         if key in seen:
             new_id = str(row['STICR ID'])
             if new_id not in seen[key]['STICR ID'].split('\n'):
@@ -685,7 +695,12 @@ _sticr_heading = doc.add_heading("Description of Product(s) Under Test", level=3
 current.addnext(_sticr_heading._element)
 current = _sticr_heading._element
 
-create_sticr_table(doc, collapse_sticr_ids(sticr_df))
+# Keep only standard KB patches and Microsoft Edge component rows
+_sticr_kb_only = sticr_df[
+    sticr_df['KB numbers'].str.match(r'^KB\d+', na=False)
+    | sticr_df['KB numbers'].str.match(r'^Microsoft Edge', case=False, na=False)
+].reset_index(drop=True)
+create_sticr_table(doc, collapse_sticr_ids(_sticr_kb_only))
 _sticr_table_elem = doc.tables[-1]._element
 current.addnext(_sticr_table_elem)
 current = _sticr_table_elem
