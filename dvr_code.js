@@ -303,7 +303,7 @@ _notes_shortening = [
     "Cumulative Update for Windows",
     "Cumulative Update for .NET Framework",
 ]
-_product_header_re = re.compile(r'^(\d+\.\d+(?:\.\d+)?)\s*-\s*(.+)$')
+_product_header_re = re.compile(r'^([A-Za-z0-9]+(?:\.[A-Za-z0-9]+)+)\s*-\s*(.+)$')
 
 def html_to_text(html_str):
     text = re.sub(r'<li\b[^>]*>', '\n', html_str, flags=re.IGNORECASE)
@@ -349,7 +349,7 @@ for _si in _sticr_items_raw:
         return bool(
             re.match(r'^\d{4}-\d{2}', line)
             or re.match(r'^\*', line)
-            or re.match(r'^\d+\.\d+(?:\.\d+)?\s*-\s*', line)
+            or re.match(r'^[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)+\s*-\s*', line)  # header: 4.7.2 - or C.03 -
             or re.match(r'^Microsoft Edge', line, re.IGNORECASE)
             or re.match(r'^[a-z]\)\s', line)
             or re.search(r'\.exe\b', line, re.IGNORECASE)
