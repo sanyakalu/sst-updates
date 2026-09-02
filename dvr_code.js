@@ -194,7 +194,7 @@ def create_test_table(doc, table_df):
             cells[0].text = str(item["Test Case ID"])
             cells[1].text = str(item["Test Case Title"])
             cells[2].text = str(item["PIC iX Build"])
-            cells[3].text = get_ancillary_solution(item["Run Name"]) or get_ancillary_solution(item.get("Suite Name", ""))
+            cells[3].text = get_ancillary_solution(item["Run Name"]) or get_ancillary_solution(item.get("Suite Name", "")) or get_ancillary_solution(item.get("Table", "").replace("Test Summary-", ""))
             cells[4].text = str(item["Run ID"])
             cells[5].text = str(item["Result"])
             for cell in cells:
