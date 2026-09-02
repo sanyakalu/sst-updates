@@ -516,17 +516,6 @@ if not sticr_df.empty:
             .str.replace("Microsoft Edge WebView2", "Microsoft Edge-WebView2", regex=False)
         )
 
-    # Parse .NET update lines — extract .NET X.Y as component identifier (like Edge)
-    _net_mask = sticr_df["KB Updates"].str.match(r'\d{4}-\d{2}\s+\.NET', na=False)
-    if _net_mask.any():
-        def parse_net_line(line):
-            clean = re.sub(r'^\d{4}-\d{2}\s+', '', str(line))
-            m = re.match(r'^(\.NET\s+\d+\.\d+)', clean, re.IGNORECASE)
-            return (m.group(1).strip(), clean) if m else ('.NET', clean)
-        _parsed_net = sticr_df.loc[_net_mask, "KB Updates"].apply(parse_net_line)
-        sticr_df.loc[_net_mask, "KB numbers"]          = _parsed_net.apply(lambda x: x[0])
-        sticr_df.loc[_net_mask, "Notes / Instructions"] = _parsed_net.apply(lambda x: x[1])
-
     # SSU: must install before other updates
     _ssu_mask = sticr_df["Notes / Instructions"].str.contains("Servicing Stack Update for Windows", na=False)
     sticr_df.loc[_ssu_mask, "Recommended Customer Action"] = "Install Recommended Update prior to other updates"
@@ -721,7 +710,6 @@ current = _sticr_heading._element
 _sticr_kb_only = sticr_df[
     sticr_df['KB numbers'].str.match(r'^KB\d+', na=False)
     | sticr_df['KB numbers'].str.match(r'^Microsoft Edge', case=False, na=False)
-    | sticr_df['KB numbers'].str.match(r'^\.NET', case=False, na=False)
 ].reset_index(drop=True)
 create_sticr_table(doc, collapse_sticr_ids(_sticr_kb_only))
 _sticr_table_elem = doc.tables[-1]._element
