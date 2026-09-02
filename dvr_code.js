@@ -96,6 +96,14 @@ def determine_section(test_case_name):
 
 df["Section"] = df["Test Case Name"].apply(determine_section)
 
+# Fall back to version from Run Name when Pipeline Run is a bare numeric ID
+if not df.empty:
+    _num_mask = df['Pipeline Run'].str.match(r'^\d+$', na=False)
+    df.loc[_num_mask, 'Pipeline Run'] = (
+        df.loc[_num_mask, 'Run Name']
+        .str.extract(r'([A-Za-z0-9]+\.[A-Za-z0-9.]+)', expand=False)
+    )
+
 doc_df = pd.DataFrame({
     "Table":           df.get('Doc Table',      pd.Series(dtype=str)),
     "Section":         df.get('Section',        pd.Series(dtype=str)),
@@ -222,6 +230,7 @@ doc_df_copy = doc_df.copy()
 doc_df_copy["Ancillary Solution"] = doc_df_copy["Run Name"].apply(get_ancillary_solution)
 
 bullet_data = []
+covered_tables = set()
 _ancillary_groups = doc_df_copy[doc_df_copy["Ancillary Solution"] != ""].groupby("Ancillary Solution", sort=False)
 for ancillary, group in _ancillary_groups:
     build = group["PIC iX Build"].dropna().iloc[0] if not group["PIC iX Build"].dropna().empty else ""
@@ -230,6 +239,14 @@ for ancillary, group in _ancillary_groups:
         for t in group["Table"].dropna()
     ))
     bullet_data.append((build, ancillary, tables))
+    covered_tables.update(group["Table"].dropna().tolist())
+
+for _tbl in doc_df["Table"].dropna().unique():
+    if _tbl not in covered_tables:
+        _tbl_rows = doc_df_copy[doc_df_copy["Table"] == _tbl]
+        _build = _tbl_rows["PIC iX Build"].dropna().iloc[0] if not _tbl_rows["PIC iX Build"].dropna().empty else ""
+        _label = _tbl.replace("Test Summary-", "").strip()
+        bullet_data.append((_build, _label, [_label]))
 
 pair_order = {pair[2]: i for i, pair in enumerate(PRODUCT_PAIRS)}
 bullet_data.sort(key=lambda x: pair_order.get(x[1], 999))
