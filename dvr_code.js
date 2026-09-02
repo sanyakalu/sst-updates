@@ -616,7 +616,7 @@ def numbered_installs(rca_text):
     items = [item.strip() for item in re.split(r'Install:\s*', str(rca_text)) if item.strip()]
     return "\n".join(f"{i}. {item}" for i, item in enumerate(items, 1))
 
-def create_sticr_table(doc, collapse_sticr_ids(sticr_df)):
+def create_sticr_table(doc, sticr_df):
     table = doc.add_table(rows=1, cols=5)
     table.style = "Table Grid"
     headers = ["Product Name", "Product Number", "Software Revision",
