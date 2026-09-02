@@ -353,13 +353,17 @@ for _si in _sticr_items_raw:
             or re.match(r'^Microsoft Edge', line, re.IGNORECASE)
             or re.match(r'^[a-z]\)\s', line)
             or re.search(r'\.exe\b', line, re.IGNORECASE)
+            or re.match(r'^CVE-\d{4}-\d+', line, re.IGNORECASE)  # CVE entry
+            or re.match(r'^https?://', line, re.IGNORECASE)       # URL reference
+            or re.match(r'^Visual Studio', line, re.IGNORECASE)   # Visual Studio
+            or re.match(r'^7-Zip', line, re.IGNORECASE)           # 7-Zip
         )
 
     joined_lines = []
     for _line in raw_lines:
         prev_is_header = (
             joined_lines and
-            bool(re.match(r'^\d+\.\d+(?:\.\d+)?\s*-\s*', joined_lines[-1]))
+            bool(re.match(r'^[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)+\s*-\s*', joined_lines[-1]))
         )
         if joined_lines and not _is_new_entry(_line) and not prev_is_header:
             joined_lines[-1] = joined_lines[-1] + ' ' + _line
