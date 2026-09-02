@@ -111,6 +111,7 @@ doc_df = pd.DataFrame({
     "Test Case Title": df.get('Test Case Name', pd.Series(dtype=str)),
     "PIC iX Build":    df.get('Pipeline Run',   pd.Series(dtype=str)),
     "Run Name":        df.get('Run Name',       pd.Series(dtype=str)),
+    "Suite Name":      df.get('Suite Name',     pd.Series(dtype=str)),
     "Run ID":          df.get('Run ID',         pd.Series(dtype=str)),
     "Result":          df.get('Outcome',        pd.Series(dtype=str)),
 })
@@ -193,7 +194,7 @@ def create_test_table(doc, table_df):
             cells[0].text = str(item["Test Case ID"])
             cells[1].text = str(item["Test Case Title"])
             cells[2].text = str(item["PIC iX Build"])
-            cells[3].text = get_ancillary_solution(item["Run Name"])
+            cells[3].text = get_ancillary_solution(item["Run Name"]) or get_ancillary_solution(item.get("Suite Name", ""))
             cells[4].text = str(item["Run ID"])
             cells[5].text = str(item["Result"])
             for cell in cells:
