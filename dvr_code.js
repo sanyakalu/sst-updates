@@ -104,6 +104,9 @@ if not df.empty:
         .str.extract(r'([A-Za-z0-9]+\.[A-Za-z0-9.]+)', expand=False)
     )
 
+# Filter to only supported release versions (4.x or C.x) before building doc_df
+df = df[df['Pipeline Run'].str.startswith(('4', 'C'), na=False)]
+
 doc_df = pd.DataFrame({
     "Table":           df.get('Doc Table',      pd.Series(dtype=str)),
     "Section":         df.get('Section',        pd.Series(dtype=str)),
