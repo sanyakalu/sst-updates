@@ -325,10 +325,16 @@ def run_fetch_dvr_data(month: str, year: str):
                         run_cache[run_id] = re.sub(r'\s*\(Manual\)', '', raw_name).strip()
                     run_name = run_cache[run_id]
 
-                # strip PIIC_iX_ prefix and filter to relevant builds
+                # strip PIIC_iX_ prefix
                 if isinstance(pipeline_run, str) and pipeline_run.startswith("PIIC_iX_"):
                     pipeline_run = pipeline_run[len("PIIC_iX_"):]
-                if not isinstance(pipeline_run, str) or not pipeline_run[:1] in ("4", "C", "B"):
+                # numeric fallback: bare build ID → extract version from run name
+                if isinstance(pipeline_run, str) and re.match(r'^\d+$', pipeline_run):
+                    m = re.search(r'([A-Za-z0-9]+\.[A-Za-z0-9.]+)', run_name)
+                    if m:
+                        pipeline_run = m.group(1)
+                # filter to supported builds
+                if not isinstance(pipeline_run, str) or pipeline_run[:1] not in ("4", "C", "B"):
                     continue
 
                 test_rows.append([
