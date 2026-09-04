@@ -96,6 +96,10 @@ def determine_section(test_case_name):
 
 df["Section"] = df["Test Case Name"].apply(determine_section)
 
+if not df.empty:
+    df['Run Name'] = df['Run Name'].str.replace(r'\s*\(Manual\)', '', regex=True).str.strip()
+    df['Pipeline Run'] = df['Pipeline Run'].str.replace('PIIC_iX_', '', n=1, regex=False)
+
 # Fall back to version from Run Name when Pipeline Run is a bare numeric ID
 if not df.empty:
     _num_mask = df['Pipeline Run'].str.match(r'^\d+$', na=False)
@@ -252,7 +256,11 @@ for _tbl in doc_df["Table"].dropna().unique():
         _tbl_rows = doc_df_copy[doc_df_copy["Table"] == _tbl]
         _build = _tbl_rows["PIC iX Build"].dropna().iloc[0] if not _tbl_rows["PIC iX Build"].dropna().empty else ""
         _label = _tbl.replace("Test Summary-", "").strip()
-        bullet_data.append((_build, _label, [_label]))
+        _ancillary_from_name = get_ancillary_solution(_label)
+        if _ancillary_from_name:
+            bullet_data.append((_build, _ancillary_from_name, [_label]))
+        else:
+            bullet_data.append((_build, _label, [_label]))
 
 pair_order = {pair[2]: i for i, pair in enumerate(PRODUCT_PAIRS)}
 bullet_data.sort(key=lambda x: pair_order.get(x[1], 999))
@@ -453,6 +461,7 @@ if not sticr_df.empty:
         sticr_df["KB numbers"].apply(lambda x: isinstance(x, list) and len(x) == 0)
         & (sticr_df["Recommended Customer Action"].isna() | sticr_df["Recommended Customer Action"].eq(""))
         & ~sticr_df["KB Updates"].str.match(r'^Microsoft Edge', case=False, na=False)
+        & ~sticr_df["KB Updates"].str.match(r'\d{4}-\d{2}\s+\.NET', na=False)
     ]
     _rows_to_drop = []
     for _idx, _row in _empty_rows.iterrows():
